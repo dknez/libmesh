@@ -35,17 +35,22 @@ RBEIMAssembly::RBEIMAssembly(RBEIMConstruction & rb_eim_con_in,
                              unsigned int basis_function_index_in)
   : _rb_eim_con(rb_eim_con_in),
     _basis_function_index(basis_function_index_in),
-    _ghosted_basis_function(NumericVector<Number>::build(rb_eim_con_in.system().comm()))
+    _ghosted_basis_function(NumericVector<Number>::build(
+      rb_eim_con_in.get_explicit_system().comm()))
 {
   // localize the vector that stores the basis function for this assembly object,
   // i.e. the vector that is used in evaluate_basis_function_at_quad_pts
 #ifdef LIBMESH_ENABLE_GHOSTED
-  _ghosted_basis_function->init (_rb_eim_con.n_dofs(), _rb_eim_con.n_local_dofs(),
-                                 _rb_eim_con.get_dof_map().get_send_list(), false, GHOSTED);
+  _ghosted_basis_function->init (_rb_eim_con.get_explicit_system().n_dofs(),
+                                 _rb_eim_con.get_explicit_system().n_local_dofs(),
+                                 _rb_eim_con.get_explicit_system().get_dof_map().get_send_list(),
+                                 false,
+                                 GHOSTED);
   _rb_eim_con.get_rb_evaluation().get_basis_function(_basis_function_index).
-    localize(*_ghosted_basis_function, _rb_eim_con.get_dof_map().get_send_list());
+    localize(*_ghosted_basis_function,
+              _rb_eim_con.get_explicit_system().get_dof_map().get_send_list());
 #else
-  _ghosted_basis_function->init (_rb_eim_con.n_dofs(), false, SERIAL);
+  _ghosted_basis_function->init (_rb_eim_con.get_explicit_system().n_dofs(), false, SERIAL);
   _rb_eim_con.get_rb_evaluation().get_basis_function(_basis_function_index).
     localize(*_ghosted_basis_function);
 #endif
@@ -115,7 +120,7 @@ void RBEIMAssembly::evaluate_basis_function(unsigned int var,
 
   std::vector<dof_id_type> dof_indices_var;
 
-  DofMap & dof_map = get_rb_eim_construction().get_dof_map();
+  DofMap & dof_map = get_rb_eim_construction().get_explicit_system().get_dof_map();
   dof_map.dof_indices (&element, dof_indices_var, var);
 
   libmesh_assert(dof_indices_var.size() == phi.size());
@@ -154,13 +159,13 @@ void RBEIMAssembly::initialize_fe_objects()
 {
   libmesh_assert_equal_to(_fe_var.size(), 0);
 
-  DofMap & dof_map = get_rb_eim_construction().get_dof_map();
+  DofMap & dof_map = get_rb_eim_construction().get_explicit_system().get_dof_map();
 
   const unsigned int dim =
     get_rb_eim_construction().get_mesh().mesh_dimension();
 
-  _fe_var.resize(get_rb_eim_construction().n_vars());
-  for(unsigned int var=0; var<get_rb_eim_construction().n_vars(); var++)
+  _fe_var.resize(get_rb_eim_construction().get_explicit_system().n_vars());
+  for(unsigned int var=0; var<get_rb_eim_construction().get_explicit_system().n_vars(); var++)
     {
       FEType fe_type = dof_map.variable_type(var);
       FEBase * fe = (FEBase::build(dim, fe_type)).release();
