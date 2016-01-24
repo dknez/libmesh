@@ -564,6 +564,53 @@ Real RBEIMConstruction::truth_solve(int plot_solution)
       DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
       init_context_with_sys(context, *this);
 
+      // First cache all the element data
+      std::vector< std::vector< std::vector<Number> > > parametrized_fn_vals(mesh.n_elem());
+      std::vector< std::vector<Real> > JxW_values(mesh.n_elem());
+      std::vector< std::vector<std::vector<Real> > > phi_values(mesh.n_elem());
+
+      MeshBase::const_element_iterator       el     = mesh.active_local_elements_begin();
+      const MeshBase::const_element_iterator end_el = mesh.active_local_elements_end();
+
+      for ( ; el != end_el; ++el)
+        {
+          dof_id_type elem_id = (*el)->id();
+
+          context.pre_fe_reinit(*this, *el);
+          context.elem_fe_reinit();
+
+          FEBase * elem_fe = NULL;
+          context.get_element_fe( 0, elem_fe );
+          unsigned int n_qpoints = context.get_element_qrule().n_points();
+          const std::vector<Real> & JxW = elem_fe->get_JxW();
+          const std::vector<std::vector<Real> > & phi = elem_fe->get_phi();
+          const std::vector<Point> & xyz = elem_fe->get_xyz();
+
+          // Loop over qp before var because parametrized functions often use
+          // some caching based on qp.
+          parametrized_fn_vals[elem_id].resize(n_qpoints);
+          JxW_values[elem_id].resize(n_qpoints);
+          phi_values[elem_id].resize(n_qpoints);
+          for (unsigned int qp=0; qp<n_qpoints; qp++)
+            {
+              JxW_values[elem_id][qp] = JxW[qp];
+
+              unsigned int n_var_dofs = cast_int<unsigned int>(context.get_dof_indices().size());
+              phi_values[elem_id][qp].resize(n_var_dofs);
+              for (unsigned int i=0; i != n_var_dofs; i++)
+                {
+                  phi_values[elem_id][qp][i] = phi[i][qp];
+                }
+
+              parametrized_fn_vals[elem_id][qp].resize(get_explicit_system().n_vars());
+              for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
+                {
+                  Number eval_result = eim_eval.evaluate_parametrized_function(var, xyz[qp], *(*el));
+                  parametrized_fn_vals[elem_id][qp][var] = eval_result;
+                }
+            }
+        }
+
       // We do a distinct solve for each variable in the ExplicitSystem
       for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
         {
@@ -574,15 +621,14 @@ Real RBEIMConstruction::truth_solve(int plot_solution)
 
           for ( ; el != end_el; ++el)
             {
+              dof_id_type elem_id = (*el)->id();
+
               context.pre_fe_reinit(*this, *el);
-              context.elem_fe_reinit();
+              //context.elem_fe_reinit(); <-- skip this because we cached all the FE data
 
               FEBase * elem_fe = NULL;
               context.get_element_fe( 0, elem_fe );
               unsigned int n_qpoints = context.get_element_qrule().n_points();
-              const std::vector<Real> & JxW = elem_fe->get_JxW();
-              const std::vector<Point> & xyz = elem_fe->get_xyz();
-              const std::vector<std::vector<Real> > & phi = elem_fe->get_phi();
 
               // Loop over qp before var because parametrized functions often use
               // some caching based on qp.
@@ -590,10 +636,11 @@ Real RBEIMConstruction::truth_solve(int plot_solution)
                 {
                   unsigned int n_var_dofs = cast_int<unsigned int>(context.get_dof_indices().size());
 
-                  Number eval_result = eim_eval.evaluate_parametrized_function(var, xyz[qp], *(*el));
+                  Number eval_result = parametrized_fn_vals[elem_id][qp][var];
                   for (unsigned int i=0; i != n_var_dofs; i++)
                     {
-                      context.get_elem_residual()(i) += JxW[qp] * eval_result * phi[i][qp];
+                      context.get_elem_residual()(i) +=
+                        JxW_values[elem_id][qp] * eval_result * phi_values[elem_id][qp][i];
                     }
                 }
 
