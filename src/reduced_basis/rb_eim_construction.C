@@ -564,10 +564,6 @@ Real RBEIMConstruction::truth_solve(int plot_solution)
       DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
       init_context_with_sys(context, *this);
 
-      UniquePtr<DGFEMContext> explicit_c(new DGFEMContext( get_explicit_system() ));
-      DGFEMContext & explicit_context = cast_ref<DGFEMContext &>(*explicit_c);
-      init_context_with_sys(explicit_context, get_explicit_system());
-
       // We do a distinct solve for each variable in the ExplicitSystem
       for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
         {
