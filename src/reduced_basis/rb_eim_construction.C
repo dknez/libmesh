@@ -837,39 +837,33 @@ void RBEIMConstruction::init_dof_map_between_systems()
       _dof_map_between_systems[var].resize(n_sys_dofs);
     }
 
-  UniquePtr<DGFEMContext> c(new DGFEMContext( *this ));
-  DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
-  init_context_with_sys(context, *this);
+  std::vector<dof_id_type> implicit_sys_dof_indices;
+  std::vector<dof_id_type> explicit_sys_dof_indices;
 
-  UniquePtr<DGFEMContext> explicit_c(new DGFEMContext( get_explicit_system() ));
-  DGFEMContext & explicit_context = cast_ref<DGFEMContext &>(*explicit_c);
-  init_context_with_sys(explicit_context, get_explicit_system());
-
-  MeshBase::const_element_iterator       el     = get_mesh().active_local_elements_begin();
-  const MeshBase::const_element_iterator end_el = get_mesh().active_local_elements_end();
+  MeshBase::const_element_iterator       el     = get_mesh().active_elements_begin();
+  const MeshBase::const_element_iterator end_el = get_mesh().active_elements_end();
 
   for ( ; el != end_el; ++el)
     {
-      context.pre_fe_reinit(*this, *el);
-      context.elem_fe_reinit();
+      const Elem * elem = *el;
 
-      explicit_context.pre_fe_reinit(get_explicit_system(), *el);
-      explicit_context.elem_fe_reinit();
+      this->get_dof_map().dof_indices (elem, implicit_sys_dof_indices);
 
-      const unsigned int n_dofs = context.get_dof_indices().size();
+      const unsigned int n_dofs = implicit_sys_dof_indices.size();
 
       for(unsigned int var=0; var<n_vars; var++)
         {
-          const unsigned int n_explicit_dofs = explicit_context.get_dof_indices(var).size();
+          get_explicit_system().get_dof_map().dof_indices (elem, explicit_sys_dof_indices, var);
 
-          libmesh_assert(n_explicit_dofs == n_dofs);
+          libmesh_assert(explicit_sys_dof_indices.size() == n_dofs);
 
           for(unsigned int i=0; i<n_dofs; i++)
             {
-              dof_id_type dof_index = context.get_dof_indices()[i];
-              dof_id_type explicit_dof_index = explicit_context.get_dof_indices(var)[i];
+              dof_id_type implicit_sys_dof_index = implicit_sys_dof_indices[i];
+              dof_id_type explicit_sys_dof_index = explicit_sys_dof_indices[i];
 
-              _dof_map_between_systems[var][dof_index] = explicit_dof_index;
+              _dof_map_between_systems[var][implicit_sys_dof_index] =
+                explicit_sys_dof_index;
             }
         }
     }
