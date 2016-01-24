@@ -618,19 +618,14 @@ Real RBEIMConstruction::truth_solve(int plot_solution)
           // Now copy the solution to the explicit system's solution.
           set_explicit_sys_subvector(*get_explicit_system().solution, var, *solution);
         }
-
-      get_explicit_system().solution->zero();
-      get_explicit_system().solution->close();
-      get_explicit_system().solution->add(1.);
       get_explicit_system().update();
     }
 
-  //if(plot_solution > 0)
+  if(plot_solution > 0)
     {
 #ifdef LIBMESH_HAVE_EXODUS_API
       ExodusII_IO(get_mesh()).write_equation_systems ("truth.exo",
                                                       this->get_equation_systems());
-libmesh_error();
 #endif
     }
   STOP_LOG("truth_solve()", "RBEIMConstruction");
@@ -872,7 +867,7 @@ void RBEIMConstruction::init_dof_map_between_systems()
           for(unsigned int i=0; i<n_dofs; i++)
             {
               dof_id_type dof_index = context.get_dof_indices()[i];
-              dof_id_type explicit_dof_index = explicit_context.get_dof_indices()[i];
+              dof_id_type explicit_dof_index = explicit_context.get_dof_indices(var)[i];
 
               _dof_map_between_systems[var][dof_index] = explicit_dof_index;
             }
