@@ -54,9 +54,10 @@ RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
     best_fit_type_flag(PROJECTION_BEST_FIT),
     _parametrized_functions_in_training_set_initialized(false),
     _mesh_function(NULL),
-    _performing_extra_greedy_step(false),
-    _explicit_system_name("EIM_explicit_sys")
+    _performing_extra_greedy_step(false)
 {
+  _explicit_system_name = name_in + "_explicit_sys";
+
   // We cannot do rb_solve with an empty
   // "rb space" with EIM
   use_empty_rb_solve_in_greedy = false;
