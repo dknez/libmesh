@@ -354,7 +354,7 @@ void RBEIMConstruction::enrich_RB_space()
       explicit_context.pre_fe_reinit(get_explicit_system(), *el);
       explicit_context.elem_fe_reinit();
 
-      for(unsigned int var=0; var<n_vars(); var++)
+      for(unsigned int var=0; var<get_explicit_system().n_vars(); var++)
         {
           unsigned int n_qpoints = explicit_context.get_element_qrule().n_points();
 
