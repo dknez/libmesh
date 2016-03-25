@@ -235,8 +235,8 @@ void RBConstruction::process_parameters_file (const std::string & parameters_fil
                                                  rel_training_tolerance);
   const Real abs_training_tolerance_in = infile("abs_training_tolerance",
                                                  abs_training_tolerance);
-  const bool normalize_rb_error_bound_in_greedy_in = infile("normalize_rb_error_bound_in_greedy",
-                                                             normalize_rb_error_bound_in_greedy_in);
+  const bool normalize_rb_bound_in_greedy_in = infile("normalize_rb_bound_in_greedy",
+                                                       normalize_rb_bound_in_greedy_in);
 
   // Read in the parameters from the input file too
   unsigned int n_continuous_parameters = infile.vector_variable_size("parameter_names");
@@ -296,7 +296,7 @@ void RBConstruction::process_parameters_file (const std::string & parameters_fil
                                  Nmax_in,
                                  rel_training_tolerance_in,
                                  abs_training_tolerance_in,
-                                 normalize_rb_error_bound_in_greedy_in,
+                                 normalize_rb_bound_in_greedy_in,
                                  mu_min_in,
                                  mu_max_in,
                                  discrete_parameter_values_in,
@@ -311,7 +311,7 @@ void RBConstruction::set_rb_construction_parameters(
                                                     unsigned int Nmax_in,
                                                     Real rel_training_tolerance_in,
                                                     Real abs_training_tolerance_in,
-                                                    bool normalize_rb_error_bound_in_greedy_in,
+                                                    bool normalize_rb_bound_in_greedy_in,
                                                     RBParameters mu_min_in,
                                                     RBParameters mu_max_in,
                                                     std::map< std::string, std::vector<Real> > discrete_parameter_values_in,
@@ -331,7 +331,7 @@ void RBConstruction::set_rb_construction_parameters(
   set_rel_training_tolerance(rel_training_tolerance_in);
   set_abs_training_tolerance(abs_training_tolerance_in);
 
-  set_normalize_rb_bound_in_greedy(normalize_rb_error_bound_in_greedy_in);
+  set_normalize_rb_bound_in_greedy(normalize_rb_bound_in_greedy_in);
 
   // Initialize the parameter ranges and the parameters themselves
   initialize_parameters(mu_min_in, mu_max_in, discrete_parameter_values_in);
@@ -1280,17 +1280,19 @@ Real RBConstruction::get_RB_error_bound()
 
   Real error_bound = get_rb_evaluation().rb_solve(get_rb_evaluation().get_n_basis_functions());
 
-  if(normalize_rb_error_bound_in_greedy)
+  if(normalize_rb_bound_in_greedy)
   {
-    if(error_bound < abs_training_tolerance)
+    Real error_bound_normalization = get_rb_evaluation().get_error_bound_normalization();
+
+    if( (error_bound < abs_training_tolerance) ||
+        (error_bound_normalization < abs_training_tolerance) )
     {
-      // We don't want to normalize this error bound if it's
-      // already below the absolute tolerance, hence do nothing
+      // We don't want to normalize this error bound if the bound or the
+      // normalization value are below the absolute tolerance. Hence do nothing
       // in this case.
     }
     else
     {
-      Real error_bound_normalization = get_rb_evaluation().get_error_bound_normalization();
       error_bound /= error_bound_normalization;
     }
   }

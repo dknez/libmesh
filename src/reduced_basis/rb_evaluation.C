@@ -297,13 +297,11 @@ Real RBEvaluation::rb_solve(unsigned int N)
 
 Real RBEvaluation::get_error_bound_normalization()
 {
-  // Normalize the error based on the error bound in the
-  // case of an empty reduced basis. The error bound is based
-  // on the residual F - AU, so with an empty basis this gives
-  // a value based on the norm of F at the current parameters.
-
-  Real normalization = rb_solve(0);
-  return normalization;
+  // Normalize the error bound based on the l2 norm of the
+  // solution vector from the most recent solve. Override
+  // this method in a subclass is other normalization options
+  // are desired.
+  return RB_solution.l2_norm();
 }
 
 Real RBEvaluation::compute_residual_dual_norm(const unsigned int N)
