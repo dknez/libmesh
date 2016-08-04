@@ -16,30 +16,68 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
-// <h1> Systems Example 7 - Large deformation elasticity (St. Venant-Kirchoff material) </h1>
+// <h1> Systems Example 7 - Large deformation elasticity using Hencky Model </h1>
 // \author Lorenzo Zanon
 // \author David Knezevic
-// \date 2014
 //
-// In this example, we consider an elastic cantilever beam modeled as a St. Venant-Kirchoff
-// material (which is an extension of the linear elastic material model to the nonlinear
-// regime). The implementation presented here uses NonlinearImplicitSystem.
+// In this example, we consider an elastic cantilever beam using the Hencky model,
+// which is appropriate for the large strain case. The implementation presented here
+// uses NonlinearImplicitSystem.
 //
-// We formulate the PDE on the reference geometry (\Omega) as opposed to the deformed
-// geometry (\Omega^deformed). As a result (e.g. see Ciarlet's 3D elasticity book,
-// Theorem 2.6-2) the PDE is given as follows:
+// We use an Updated Lagrangian approach, in which all data refers to
+// the current configuration and we move the mesh at every iteration. (The alternative, not
+// considered here, is the Total Lagrangian formulation in which all computations are
+// performed on the reference geometry. These two approaches are equivalent, but have various
+// pros and cons in terms of implementation.)
 //
-//     \int_\Omega F_im Sigma_mj v_i,j = \int_\Omega f_i v_i + \int_\Gamma g_i v_i ds
-//
+// With this approach, the nonlinear residual has the form:
+//  G(u,v) = \int_\phi(\Omega) f_i v_i dx + \int_\phi(\Gamma) g_i v_i ds
+//           - \int_\phi(\Omega) \sigma_ij v_i,j dx,
 // where:
-//  * F is the deformation gradient, F = I + du/dx (x here refers to reference coordinates).
-//  * Sigma is the second Piola-Kirchoff stress, which for the St. Venant Kirchoff model is
-//    given by Sigma_ij = C_ijkl E_kl, where E_kl is the strain,
-//    E_kl = 0.5 * (u_k,l + u_l,k + u_m,k u_m,l).
+//  * \phi is the mapping from reference to current geometry
+//  * \sigma is the Cauchy stress tensor
 //  * f is a body load.
 //  * g is a surface traction on the surface \Gamma.
-//
 // In this example we only consider a body load (e.g. gravity), hence we set g = 0.
+//
+// We solve the PDE using Newton's method, hence we must linearize the formulation. The directional
+// derivate of G (which yields the Jacobian matrix) at u can be found in the literature, and it is
+// given by:
+//  DG(u,v)[\delta u] = \int_\phi(\Omega) \delta u_i,j a_ijkl v_k,l dx
+// where:
+//  a_ijkl = (1/J) \partial \tau_ij / \partial B_mn BB_mnkl - \sigma_il \delta_jk
+// and:
+//  * \tau is the Kirchoff stress
+//  * B is the left Cauchy-Green tensor, B = F F^T
+//  * BB_mnkl = delta_mk B_nl + delta_nk B_ml
+//  * F is the deformation gradient
+//  * J = det(F)
+//  * \delta is the Kronecker delta
+// Note that \phi, \tau, B, and F all depend on the current displacement, u, and hence this
+// problem is nonlinear.
+//
+// In the case of the Hencky model, we define the strain as follows:
+//  hencky_strain_ij = 0.5 ln(B_ij),
+// and the Hencky strain energy is given by
+//  \psi(hencky_strain) = 0.5 hencky_strain_ij D_ijkl hencky_strain_kl,
+// where D_ijkl is the fourth order linear elasticity tensor (e.g. see systems_of_equations_ex6)
+// Note that the logarithm in the definition of the Hencky strain limits the strain energy
+// which is why this is an effective model in the large strain case.
+//
+// Also, for the Hencky model, we have:
+//  * \tau_ij = \partial \psi / \partial hencky_strain_ij = D_ijkl hencky_strain_kl.
+//  * \sigma_ij = J tau_ij = J D_ijkl hencky_strain_kl.
+//
+// We can then obtain a_ijkl by differentiating \tau wrt B, which gives:
+//  \tau_ij / \partial B_kl = 0.5 D_ijmn L_mnkl
+// where:
+//   L_ijkl = \partial(ln(B_ij)) / \partial B_kl.
+// Plugging these values into the formula above for a_ijkl gives:
+//  a_ijkl = (1/2/J) D_ijrs L_rsmn B_mnkl - \sigma_il \delta_jk.
+//
+// Based on the info above, we can assemble the residual and Jacobian for this model and
+// hence solve the nonlinear system using the Newton's method solver provided by
+// NonlinearImplicitSystem.
 
 // C++ include files that we need
 #include <iostream>
