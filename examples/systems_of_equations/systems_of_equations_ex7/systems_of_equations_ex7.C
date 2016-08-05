@@ -22,8 +22,9 @@
 //
 // In this example, we consider an elastic cantilever beam using the Hencky model,
 // which is appropriate for the large strain case. We follow the formulation from
-// Computational Methods for Plasticity, by Neta, Peric, Owen. The implementation
-// here uses NonlinearImplicitSystem to assmble and solve the nonlinear system.
+// Computational Methods for Plasticity, by Neta, Peric, Owen. (We refer to this book
+// as NPO below.) The implementation here uses NonlinearImplicitSystem to assmble
+// and solve the nonlinear system.
 //
 // We use an Updated Lagrangian approach, in which all data refers to
 // the current configuration and we move the mesh at every iteration. (The alternative, not
@@ -66,9 +67,8 @@
 //  ln(B) = \sum_i=1^p ln(\lambda_i) E_i
 // where p is the number of distinct eigenvalues, \lambda_i is the i^th eigenvalue of B_ij,
 // and E_i is the i^th "eigenprojection" operator (i.e. the projection onto the eigenspace).
-// We follow the approach in Appendix A.5 of the book referred to above in order to evaluate
-// ln(B_ij) and its derivative \partial(ln(B_ij)) / \partial B_kl (we require the derivative
-// for a_ijkl, as discussed below).
+// We follow the approach in Appendix A.5 of NPO in order to evaluate ln(B_ij) and its derivative
+// \partial(ln(B_ij)) / \partial B_kl (we require the derivative for a_ijkl, as discussed below).
 //
 // Also, for the Hencky model, we have:
 //  * \tau_ij = \partial \psi / \partial hencky_strain_ij = D_ijkl hencky_strain_kl.
@@ -110,6 +110,8 @@
 #include "libmesh/mesh_generation.h"
 #include "libmesh/dirichlet_boundaries.h"
 #include "libmesh/zero_function.h"
+#include "libmesh/fe_interface.h"
+#include "libmesh/fe_compute_data.h"
 
 // The nonlinear solver and system we will be using
 #include "libmesh/nonlinear_solver.h"
@@ -124,17 +126,15 @@
 
 using namespace libMesh;
 
-
-
-class LargeDeformationElasticity : public NonlinearImplicitSystem::ComputeResidual,
-                                   public NonlinearImplicitSystem::ComputeJacobian
+class FiniteStrainElasticity : public NonlinearImplicitSystem::ComputeResidual,
+                               public NonlinearImplicitSystem::ComputeJacobian
 {
 private:
   EquationSystems & es;
 
 public:
 
-  LargeDeformationElasticity (EquationSystems & es_in) :
+  FiniteStrainElasticity (EquationSystems & es_in) :
     es(es_in)
   {}
 
@@ -148,14 +148,14 @@ public:
   }
 
   /**
-   * Evaluate the fourth order tensor (C_ijkl) that relates stress to strain.
+   * Evaluate the fourth order elasticity tensor D_ijkl.
    */
-  Real elasticity_tensor(Real young_modulus,
-                         Real poisson_ratio,
-                         unsigned int i,
-                         unsigned int j,
-                         unsigned int k,
-                         unsigned int l)
+  Real D_ijkl(Real young_modulus,
+              Real poisson_ratio,
+              unsigned int i,
+              unsigned int j,
+              unsigned int k,
+              unsigned int l)
   {
     // Define the Lame constants
     const Real lambda_1 = (young_modulus*poisson_ratio)/((1.+poisson_ratio)*(1.-2.*poisson_ratio));
@@ -173,6 +173,9 @@ public:
                          SparseMatrix<Number> & jacobian,
                          NonlinearImplicitSystem & /*sys*/)
   {
+    // First we move the mesh, since we use the Updated Lagrangian approach.
+    move_mesh(soln, /*scaling_factor*/ 1.);
+
     const Real young_modulus = es.parameters.get<Real>("young_modulus");
     const Real poisson_ratio = es.parameters.get<Real>("poisson_ratio");
 
@@ -180,7 +183,7 @@ public:
     const unsigned int dim = mesh.mesh_dimension();
 
     NonlinearImplicitSystem & system =
-      es.get_system<NonlinearImplicitSystem>("NonlinearElasticity");
+      es.get_system<NonlinearImplicitSystem>("FiniteStrainElasticity");
 
     const unsigned int u_var = system.variable_number ("u");
 
@@ -270,7 +273,7 @@ public:
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
                     stress_tensor(i,j) +=
-                      elasticity_tensor(young_modulus, poisson_ratio, i, j, k, l) * strain_tensor(k, l);
+                      D_ijkl(young_modulus, poisson_ratio, i, j, k, l) * strain_tensor(k, l);
 
             for (unsigned int dof_i=0; dof_i<n_var_dofs; dof_i++)
               for (unsigned int dof_j=0; dof_j<n_var_dofs; dof_j++)
@@ -288,7 +291,7 @@ public:
                           {
                             Number FxC_ijkl = 0.;
                             for (unsigned int m=0; m<3; m++)
-                              FxC_ijkl += F(i,m) * elasticity_tensor(young_modulus, poisson_ratio, m, j, k, l);
+                              FxC_ijkl += F(i,m) * D_ijkl(young_modulus, poisson_ratio, m, j, k, l);
 
                             Ke_var[i][k](dof_i,dof_j) += JxW[qp] *
                               (-0.5 * FxC_ijkl * dphi[dof_j][qp](l) * dphi[dof_i][qp](j));
@@ -306,6 +309,9 @@ public:
         dof_map.constrain_element_matrix (Ke, dof_indices);
         jacobian.add_matrix (Ke, dof_indices);
       }
+
+    // Finally undo the move.
+    move_mesh(soln, /*scaling_factor*/ -1.);
   }
 
   /**
@@ -315,6 +321,9 @@ public:
                          NumericVector<Number> & residual,
                          NonlinearImplicitSystem & /*sys*/)
   {
+    // First we move the mesh, since we use the Updated Lagrangian approach.
+    move_mesh(soln, /*scaling_factor*/ 1.);
+
     const Real young_modulus = es.parameters.get<Real>("young_modulus");
     const Real poisson_ratio = es.parameters.get<Real>("poisson_ratio");
     const Real forcing_magnitude = es.parameters.get<Real>("forcing_magnitude");
@@ -323,7 +332,7 @@ public:
     const unsigned int dim = mesh.mesh_dimension();
 
     NonlinearImplicitSystem & system =
-      es.get_system<NonlinearImplicitSystem>("NonlinearElasticity");
+      es.get_system<NonlinearImplicitSystem>("FiniteStrainElasticity");
 
     const unsigned int u_var = system.variable_number ("u");
 
@@ -375,6 +384,13 @@ public:
 
         for (unsigned int qp=0; qp<qrule.n_points(); qp++)
           {
+            // The quantities required below are:
+            //  * The deformation gradient F
+            //  * J = det(F)
+            //  * B = F F^T
+            //  * hencky_strain_ij = 0.5 ln(B_ij)
+            //  * \sigma_ij = J D_ijkl hencky_strain_kl
+
             DenseVector<Number> u_vec(3);
             DenseMatrix<Number> grad_u(3, 3);
             for (unsigned int var_i=0; var_i<3; var_i++)
@@ -388,30 +404,28 @@ public:
                     grad_u(var_i,var_j) += dphi[j][qp](var_j)*soln(dof_indices_var[var_i][j]);
               }
 
-            DenseMatrix<Number> strain_tensor(3, 3);
-            for (unsigned int i=0; i<3; i++)
-              for (unsigned int j=0; j<3; j++)
-                {
-                  strain_tensor(i,j) += 0.5 * (grad_u(i,j) + grad_u(j,i));
-
-                  for (unsigned int k=0; k<3; k++)
-                    strain_tensor(i,j) += 0.5 * grad_u(k,i)*grad_u(k,j);
-                }
-
-            // Define the deformation gradient
             DenseMatrix<Number> F(3, 3);
             F = grad_u;
             for (unsigned int var=0; var<3; var++)
               F(var, var) += 1.;
 
-            DenseMatrix<Number> stress_tensor(3, 3);
+            Real J = F.det();
 
+            DenseMatrix<Number> B = F;
+            B.right_multiply_transpose(F);
+
+            DenseMtrix<Number> hencky_strain = get_hencky_strain(B);
+
+            DenseMatrix<Number> sigma(3, 3);
             for (unsigned int i=0; i<3; i++)
               for (unsigned int j=0; j<3; j++)
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
-                    stress_tensor(i,j) +=
-                      elasticity_tensor(young_modulus, poisson_ratio, i, j, k, l) * strain_tensor(k,l);
+                    sigma(i,j) +=
+                      J * D_ijkl(young_modulus, poisson_ratio, i, j, k, l) * hencky_strain(k,l);
+
+            // Now we assemble the residual, which is given by:
+            //  G(u,v) = \int_\phi(\Omega) f_i v_i dx - \int_\phi(\Omega) \sigma_ij v_i,j dx,
 
             DenseVector<Number> f_vec(3);
             f_vec(0) = 0.;
@@ -423,11 +437,7 @@ public:
                 {
                   for (unsigned int j=0; j<3; j++)
                     {
-                      Number FxStress_ij = 0.;
-                      for (unsigned int m=0; m<3; m++)
-                        FxStress_ij += F(i,m) * stress_tensor(m,j);
-
-                      Re_var[i](dof_i) += JxW[qp] * (-FxStress_ij * dphi[dof_i][qp](j));
+                      Re_var[i](dof_i) += JxW[qp] * (-sigma * dphi[dof_i][qp](j));
                     }
 
                   Re_var[i](dof_i) += JxW[qp] * (f_vec(i) * phi[dof_i][qp]);
@@ -436,6 +446,195 @@ public:
 
         dof_map.constrain_element_vector (Re, dof_indices);
         residual.add_vector (Re, dof_indices);
+      }
+
+    // Finally undo the move.
+    move_mesh(soln, /*scaling_factor*/ -1.);
+  }
+
+  /**
+   * Get the Hencky strain based on the tensor B. Here we follow the implementation
+   * described in Box A.5 of NPO.
+   */
+  DenseMatrix<Number> get_hencky_strain(const DenseMatrix<Number>& B) const
+  {
+    DenseMatrix<Number> B_squared = B;
+    B_squared.right_multiply(B);
+
+    Number I1 = B(0,0) + B(1,1) + B(2,2);
+    Number I2 = 0.5 * ( I1*I1 + B_squared(0,0) + B_squared(1,1) + B_squared(2,2) );
+    Number I3 = B.det();
+
+    Number R = (-2.*I1*I1*I1 + 9.*I1*I2 - 27.*I3) / 54.;
+    Number Q = I1*I1 - 3.*I2;
+    Number theta = acos(R / std::sqrt(Q*Q*Q));
+
+    Number lambda_1 = -2. * std::sqrt(Q) * cos(theta/3.) + I1. / 3.;
+    Number lambda_2 = -2. * std::sqrt(Q) * cos( (theta+2.*pi)/3.) + I1. / 3.;
+    Number lambda_3 = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1. / 3.;
+
+    Real lambda_tol = 1.e-10;
+
+    bool equal_12 =
+      ( std::abs(lambda_1 - lambda_2)/std::abs(lambda_1) < lambda_tol );
+    bool equal_13 =
+      ( std::abs(lambda_1 - lambda_3)/std::abs(lambda_1) < lambda_tol );
+    bool equal_23 =
+      ( std::abs(lambda_2 - lambda_3)/std::abs(lambda_1) < lambda_tol );
+
+    DenseMatrix<Number> identity(3,3);
+    identity(0,0) = 1.;
+    identity(1,1) = 1.;
+    identity(2,2) = 1.;
+
+    std::vector<Number> distinct_lambdas;
+    std::vector< DenseMatrix<Number> > eigenprojections;
+    if( equal_12 && equal_13 && equal_23 )
+    {
+      distinct_lambdas.push_back(lambda_1);
+      eigenprojections.push_back(identity);
+    }
+    else if(equal_12 && !equal_23)
+    {
+      DenseMatrix<Number> E_3 = get_eigenprojection(lambda_3, B);
+
+      DenseMatrix<Number> E_12 = identity;
+      E_12.add(-1., E_3);
+      distinct_lambdas.push_back(lamba_1);
+      eigenprojections.push_back(E_12);
+
+      distinct_lambdas.push_back(lamba_3);
+      eigenprojections.push_back(E_3);
+    }
+    else if(!equal_12 && equal_23)
+    {
+      DenseMatrix<Number> E_1 = get_eigenprojection(lambda_1, B);
+
+      DenseMatrix<Number> E_23 = identity;
+      E_23.add(-1., E_1);
+      distinct_lambdas.push_back(lamba_2);
+      eigenprojections.push_back(E_23);
+
+      distinct_lambdas.push_back(lamba_1);
+      eigenprojections.push_back(E_1);
+    }
+    else if(equal_13 && !equal_23)
+    {
+      DenseMatrix<Number> E_2 = get_eigenprojection(lambda_2, B);
+
+      DenseMatrix<Number> E_13 = identity;
+      E_13.add(-1., E_2);
+      distinct_lambdas.push_back(lamba_1);
+      eigenprojections.push_back(E_13);
+
+      distinct_lambdas.push_back(lamba_2);
+      eigenprojections.push_back(E_2);
+    }
+    else if(!equal_12 && !equal_23)
+    {
+      DenseMatrix<Number> E_1 = get_eigenprojection(lambda_1, B);
+      distinct_lambdas.push_back(lamba_1);
+      eigenprojections.push_back(E_1);
+
+      DenseMatrix<Number> E_2 = get_eigenprojection(lambda_2, B);
+      distinct_lambdas.push_back(lamba_2);
+      eigenprojections.push_back(E_2);
+
+      DenseMatrix<Number> E_3 = get_eigenprojection(lambda_3, B);
+      distinct_lambdas.push_back(lamba_3);
+      eigenprojections.push_back(E_3);
+    }
+    else
+    {
+      libmesh_error_msg("Should not reach here!");
+    }
+
+    DenseMatrix<Number> hencky_strain(3,3);
+    for(unsigned int i=0; i<distinct_lambdas.size(); i++)
+    {
+      Number log_lambda_i = 0.5 * log(distinct_lambdas[i]);
+      hencky_strain.add(log_lambda_i, eigenprojections[i]);
+    }
+
+    return hencky_strain;
+  }
+
+  /**
+   * Move the mesh nodes based on the current solution.
+   * We scale \p soln by \p scaling_factor.
+   */
+  void move_mesh (const NumericVector<Number> & soln,
+                  Real scaling_factor)
+  {
+    MeshBase & mesh = es.get_mesh();
+
+    NonlinearImplicitSystem & system =
+      es.get_system<NonlinearImplicitSystem>("FiniteStrainElasticity");
+
+    // Maintain a set of node ids that we've encountered.
+    std::set<dof_id_type> encountered_node_ids;
+
+    // Localize soln so that we have the data to move all
+    // elements (not just elements local to this processor).
+    UniquePtr< NumericVector<Number> > localized_solution =
+      NumericVector<Number>::build(es.comm());
+
+    localized_solution->init (system.solution->size(), false, SERIAL);
+    soln.localize(*localized_solution);
+    localized_solution->scale(scaling_factor);
+
+    MeshBase::const_element_iterator       el     = mesh.active_elements_begin();
+    const MeshBase::const_element_iterator end_el = mesh.active_elements_end();
+
+    for ( ; el != end_el; ++el)
+      {
+        Elem * elem = *el;
+        Elem * orig_elem = mesh.elem_ptr(elem->id());
+
+        for (unsigned int node_id=0; node_id<elem->n_nodes(); node_id++)
+          {
+            Node & node = elem->node_ref(node_id);
+
+            if (encountered_node_ids.find(node.id()) != encountered_node_ids.end())
+              continue;
+
+            encountered_node_ids.insert(node.id());
+
+            std::vector<std::string> uvw_names(3);
+            uvw_names[0] = "u";
+            uvw_names[1] = "v";
+            uvw_names[2] = "w";
+
+            {
+              const Point master_point = elem->master_point(node_id);
+
+              Point uvw;
+              for (unsigned int index=0; index<uvw_names.size(); index++)
+                {
+                  const unsigned int var = system.variable_number(uvw_names[index]);
+                  const FEType & fe_type = system.get_dof_map().variable_type(var);
+
+                  FEComputeData data (es, master_point);
+
+                  FEInterface::compute_data(elem->dim(),
+                                            fe_type,
+                                            elem,
+                                            data);
+
+                  std::vector<dof_id_type> dof_indices_var;
+                  system.get_dof_map().dof_indices (orig_elem, dof_indices_var, var);
+
+                  for (unsigned int i=0; i<dof_indices_var.size(); i++)
+                    {
+                      Number value = (*localized_solution)(dof_indices_var[i]) * data.shape[i];
+                      uvw(index) += libmesh_real(value);
+                    }
+                }
+
+              // Update the node's location
+              node += uvw;
+            }
+          }
       }
   }
 
@@ -451,7 +650,7 @@ public:
     const unsigned int dim = mesh.mesh_dimension();
 
     NonlinearImplicitSystem & system =
-      es.get_system<NonlinearImplicitSystem>("NonlinearElasticity");
+      es.get_system<NonlinearImplicitSystem>("FiniteStrainElasticity");
 
     unsigned int displacement_vars[3];
     displacement_vars[0] = system.variable_number ("u");
@@ -534,7 +733,7 @@ public:
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
                     stress_tensor(i,j) +=
-                      elasticity_tensor(young_modulus, poisson_ratio, i, j, k, l) * strain_tensor(k, l);
+                      D_ijkl(young_modulus, poisson_ratio, i, j, k, l) * strain_tensor(k, l);
 
             // stress_tensor now holds the second Piola-Kirchoff stress (PK2) at point qp.
             // However, in this example we want to compute the Cauchy stress which is given by
@@ -623,10 +822,10 @@ int main (int argc, char ** argv)
   mesh.print_info();
 
   EquationSystems equation_systems (mesh);
-  LargeDeformationElasticity lde(equation_systems);
+  FiniteStrainElasticity fse(equation_systems);
 
   NonlinearImplicitSystem & system =
-    equation_systems.add_system<NonlinearImplicitSystem> ("NonlinearElasticity");
+    equation_systems.add_system<NonlinearImplicitSystem> ("FiniteStrainElasticity");
 
   unsigned int u_var =
     system.add_variable("u",
@@ -657,8 +856,8 @@ int main (int argc, char ** argv)
   equation_systems.parameters.set<Real>         ("nonlinear solver relative residual tolerance") = nonlinear_rel_tol;
   equation_systems.parameters.set<unsigned int> ("nonlinear solver maximum iterations")          = nonlinear_max_its;
 
-  system.nonlinear_solver->residual_object = &lde;
-  system.nonlinear_solver->jacobian_object = &lde;
+  system.nonlinear_solver->residual_object = &fse;
+  system.nonlinear_solver->jacobian_object = &fse;
 
   equation_systems.parameters.set<Real>("young_modulus") = young_modulus;
   equation_systems.parameters.set<Real>("poisson_ratio") = poisson_ratio;
@@ -707,7 +906,7 @@ int main (int argc, char ** argv)
 
       libMesh::out << "Computing stresses..." << std::endl;
 
-      lde.compute_stresses();
+      fse.compute_stresses();
 
 #ifdef LIBMESH_HAVE_EXODUS_API
       std::stringstream filename;
