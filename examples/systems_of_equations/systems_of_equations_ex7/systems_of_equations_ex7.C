@@ -21,8 +21,9 @@
 // \author David Knezevic
 //
 // In this example, we consider an elastic cantilever beam using the Hencky model,
-// which is appropriate for the large strain case. The implementation presented here
-// uses NonlinearImplicitSystem.
+// which is appropriate for the large strain case. We follow the formulation from
+// Computational Methods for Plasticity, by Neta, Peric, Owen. The implementation
+// here uses NonlinearImplicitSystem to assmble and solve the nonlinear system.
 //
 // We use an Updated Lagrangian approach, in which all data refers to
 // the current configuration and we move the mesh at every iteration. (The alternative, not
@@ -30,7 +31,7 @@
 // performed on the reference geometry. These two approaches are equivalent, but have various
 // pros and cons in terms of implementation.)
 //
-// With this approach, the nonlinear residual has the form:
+// With the Updated Lagrangian approach, the nonlinear residual has the form:
 //  G(u,v) = \int_\phi(\Omega) f_i v_i dx + \int_\phi(\Gamma) g_i v_i ds
 //           - \int_\phi(\Omega) \sigma_ij v_i,j dx,
 // where:
@@ -41,9 +42,8 @@
 // In this example we only consider a body load (e.g. gravity), hence we set g = 0.
 //
 // We solve the PDE using Newton's method, hence we must linearize the formulation. The directional
-// derivate of G (which yields the Jacobian matrix) at u can be found in the literature, and it is
-// given by:
-//  DG(u,v)[\delta u] = \int_\phi(\Omega) \delta u_i,j a_ijkl v_k,l dx
+// derivate of G (which yields the Jacobian matrix) is given by:
+//  DG(u,v)[\deltau] = \int_\phi(\Omega) \deltau_i,j a_ijkl v_k,l dx
 // where:
 //  a_ijkl = (1/J) \partial \tau_ij / \partial B_mn BB_mnkl - \sigma_il \delta_jk
 // and:
@@ -58,26 +58,33 @@
 //
 // In the case of the Hencky model, we define the strain as follows:
 //  hencky_strain_ij = 0.5 ln(B_ij),
-// and the Hencky strain energy is given by
+// and the Hencky strain energy is given by:
 //  \psi(hencky_strain) = 0.5 hencky_strain_ij D_ijkl hencky_strain_kl,
-// where D_ijkl is the fourth order linear elasticity tensor (e.g. see systems_of_equations_ex6)
-// Note that the logarithm in the definition of the Hencky strain limits the strain energy
-// which is why this is an effective model in the large strain case.
+// where D_ijkl is the fourth order linear elasticity tensor (e.g. see systems_of_equations_ex6).
+//
+// Note that ln(B_ij) is an isotropic tensor-valued function, defined by:
+//  ln(B) = \sum_i=1^p ln(\lambda_i) E_i
+// where p is the number of distinct eigenvalues, \lambda_i is the i^th eigenvalue of B_ij,
+// and E_i is the i^th "eigenprojection" operator (i.e. the projection onto the eigenspace).
+// We follow the approach in Appendix A.5 of the book referred to above in order to evaluate
+// ln(B_ij) and its derivative \partial(ln(B_ij)) / \partial B_kl (we require the derivative
+// for a_ijkl, as discussed below).
 //
 // Also, for the Hencky model, we have:
 //  * \tau_ij = \partial \psi / \partial hencky_strain_ij = D_ijkl hencky_strain_kl.
 //  * \sigma_ij = J tau_ij = J D_ijkl hencky_strain_kl.
 //
-// We can then obtain a_ijkl by differentiating \tau wrt B, which gives:
+// Putting the above pieces together, we can now obtain the complete expression for a_ijkl.
+// First we differentiate \tau wrt B_ij, which gives:
 //  \tau_ij / \partial B_kl = 0.5 D_ijmn L_mnkl
 // where:
 //   L_ijkl = \partial(ln(B_ij)) / \partial B_kl.
 // Plugging these values into the formula above for a_ijkl gives:
 //  a_ijkl = (1/2/J) D_ijrs L_rsmn B_mnkl - \sigma_il \delta_jk.
 //
-// Based on the info above, we can assemble the residual and Jacobian for this model and
-// hence solve the nonlinear system using the Newton's method solver provided by
-// NonlinearImplicitSystem.
+// Based on the information above, we can assemble the residual and Jacobian for this
+// model and hence solve the nonlinear system using the Newton's method solver provided
+// by NonlinearImplicitSystem.
 
 // C++ include files that we need
 #include <iostream>
