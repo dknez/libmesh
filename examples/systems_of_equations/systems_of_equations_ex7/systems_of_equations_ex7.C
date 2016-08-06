@@ -315,18 +315,18 @@ private:
     Number Q = I1*I1 - 3.*I2;
     Number theta = acos(R / std::sqrt(Q*Q*Q));
 
-    std::vector<Number> B_eigenvalues;
+    std::vector<Number> B_eigenvalues(3);
     B_eigenvalues[0] = -2. * std::sqrt(Q) * cos(theta/3.) + I1 / 3.;
     B_eigenvalues[1] = -2. * std::sqrt(Q) * cos( (theta+2.*pi)/3.) + I1 / 3.;
     B_eigenvalues[2] = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1 / 3.;
 
     Real lambda_tol = 1.e-10;
     bool equal_01 =
-      ( std::abs(B_eigenvalues[0] - B_eigenvalues[1])/std::abs(B_eigenvalues[1]) < lambda_tol );
+      ( std::abs(B_eigenvalues[0] - B_eigenvalues[1])/std::abs(B_eigenvalues[0]) < lambda_tol );
     bool equal_02 =
-      ( std::abs(B_eigenvalues[0] - B_eigenvalues[2])/std::abs(B_eigenvalues[1]) < lambda_tol );
+      ( std::abs(B_eigenvalues[0] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < lambda_tol );
     bool equal_12 =
-      ( std::abs(B_eigenvalues[1] - B_eigenvalues[2])/std::abs(B_eigenvalues[1]) < lambda_tol );
+      ( std::abs(B_eigenvalues[1] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < lambda_tol );
 
     DenseMatrix<Number> identity(3,3);
     identity(0,0) = 1.;
