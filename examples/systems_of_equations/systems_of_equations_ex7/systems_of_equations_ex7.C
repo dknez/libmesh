@@ -43,8 +43,8 @@
 // In this example we only consider a body load (e.g. gravity), hence we set g = 0.
 //
 // We solve the PDE using Newton's method, hence we must linearize the formulation. The directional
-// derivate of G (which yields the Jacobian matrix) is given by:
-//  DG(u,v)[\deltau] = \int_\phi(\Omega) \deltau_i,j a_ijkl v_k,l dx
+// derivate of G at u (which yields the Jacobian matrix) is given by:
+//  DG(u,v)[\deltau] = -\int_\phi(\Omega) a_ijkl v_i,j \deltau_k,l dx
 // where:
 //  a_ijkl = (1/J) \partial \tau_ij / \partial B_mn BB_mnkl - \sigma_il \delta_jk
 // and:
@@ -79,9 +79,9 @@
 // First we differentiate \tau wrt B_ij, which gives:
 //  \tau_ij / \partial B_kl = D_ijmn L_mnkl
 // where:
-//   L_ijkl = \partial(0.5 ln(B_ij)) / \partial B_kl.
+//  L_ijkl = \partial(hencky_strain_ij) / \partial B_kl.
 // Plugging these values into the formula above for a_ijkl gives:
-//  a_ijkl = (1/J) D_ijrs L_rsmn B_mnkl - \sigma_il \delta_jk.
+//  a_ijkl = (1/J) D_ijrs L_rsmn BB_mnkl - \sigma_il \delta_jk.
 //
 // Based on the information above, we can assemble the residual and Jacobian for this
 // model and hence solve the nonlinear system using the Newton's method solver provided
@@ -215,8 +215,10 @@ public:
   {
     libmesh_assert_equal_to(_distinct_B_eigenvalues.size(), _distinct_B_eigenprojections.size());
 
-    Number dBsquared_dB_ijkl = _B(i,k) * kronecker_delta(k,l) + _B(l,j) * kronecker_delta(i,k);
-    Number I_S_ijkl = 0.5 * (kronecker_delta(i,k)*kronecker_delta(j,l) + kronecker_delta(i,l)*kronecker_delta(j,k));
+    Number dBsquared_dB_ijkl = _B(i,k) * kronecker_delta(k,l) +
+                               _B(l,j) * kronecker_delta(i,k);
+    Number I_S_ijkl = 0.5 * (kronecker_delta(i,k)*kronecker_delta(j,l) +
+                             kronecker_delta(i,l)*kronecker_delta(j,k));
 
     // We have a separate case depending on the number of distinct eigenvalues (1, 2, or 3)
     if(_distinct_B_eigenvalues.size() == 3)
@@ -319,7 +321,6 @@ private:
     B_eigenvalues[2] = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1 / 3.;
 
     Real lambda_tol = 1.e-10;
-
     bool equal_01 =
       ( std::abs(B_eigenvalues[0] - B_eigenvalues[1])/std::abs(B_eigenvalues[1]) < lambda_tol );
     bool equal_02 =
@@ -343,27 +344,24 @@ private:
              (!equal_01 &&  equal_12) ||
              ( equal_02 && !equal_12) )
     {
-      unsigned int equal_index = 0;
-      unsigned int not_equal_index = 0;
+      unsigned int not_equal_index =0;
       if(equal_12)
       {
-        equal_index = 1;
         not_equal_index = 0;
       }
       else if(equal_02)
       {
-        equal_index = 0;
         not_equal_index = 1;
       }
       else if(equal_01)
       {
-        equal_index = 0;
         not_equal_index = 2;
       }
       else
       {
         libmesh_error_msg("Should not reach here!");
       }
+      unsigned int equal_index = (not_equal_index + 1) % 3;
 
       DenseMatrix<Number> E_not_equal_index =
         get_distinct_eigenprojection(B_eigenvalues[not_equal_index], I1, I3);
@@ -521,6 +519,13 @@ public:
 
         for (unsigned int qp=0; qp<qrule.n_points(); qp++)
           {
+            // The quantities required below are:
+            //  * The deformation gradient F
+            //  * J = det(F)
+            //  * B = F F^T
+            //  * hencky_strain_ij = 0.5 ln(B_ij)
+            //  * \sigma_ij = J D_ijkl hencky_strain_kl
+
             DenseVector<Number> u_vec(3);
             DenseMatrix<Number> grad_u(3, 3);
             for (unsigned int var_i=0; var_i<3; var_i++)
@@ -528,68 +533,72 @@ public:
                 for (unsigned int j=0; j<n_var_dofs; j++)
                   u_vec(var_i) += phi[j][qp]*soln(dof_indices_var[var_i][j]);
 
-                // Row is variable u1, u2, or u3, column is x, y, or z
+                // Row is variable u, v, or w column is x, y, or z
                 for (unsigned int var_j=0; var_j<3; var_j++)
                   for (unsigned int j=0; j<n_var_dofs; j++)
                     grad_u(var_i,var_j) += dphi[j][qp](var_j)*soln(dof_indices_var[var_i][j]);
               }
 
-            DenseMatrix<Number> strain_tensor(3, 3);
-            for (unsigned int i=0; i<3; i++)
-              for (unsigned int j=0; j<3; j++)
-                {
-                  strain_tensor(i,j) += 0.5 * (grad_u(i,j) + grad_u(j,i));
-
-                  for (unsigned int k=0; k<3; k++)
-                    strain_tensor(i,j) += 0.5 * grad_u(k,i)*grad_u(k,j);
-                }
-
-            // Define the deformation gradient
             DenseMatrix<Number> F(3, 3);
             F = grad_u;
             for (unsigned int var=0; var<3; var++)
               F(var, var) += 1.;
 
-            DenseMatrix<Number> stress_tensor(3, 3);
+            Real J = F.det();
+
+            DenseMatrix<Number> B = F;
+            B.right_multiply_transpose(F);
+
+            HenckyTensors hencky_strain_data(B);
 
             Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
+
+            DenseMatrix<Number> sigma(3, 3);
+            for (unsigned int i=0; i<3; i++)
+              for (unsigned int j=0; j<3; j++)
+                for (unsigned int k=0; k<3; k++)
+                  for (unsigned int l=0; l<3; l++)
+                    sigma(i,j) +=
+                      J * D_ijkl_tensor.evaluate(i, j, k, l) *
+                      hencky_strain_data.evaluate_hencky_strain(k,l);
+
+            // Now we assemble the Jacobian, which is given by:
+            // DG(u,v)[\deltau] = -\int_\phi(\Omega) a_ijkl v_i,j \deltau_k,l dx
+            // where:
+            //  * a_ijkl = (1/J) D_ijrs L_rsmn BB_mnkl - \sigma_il \delta_jk
+            //  * L_ijkl is the Hencky strain derivative
+            //  * BB_mnkl = delta_mk B_nl + delta_nk B_ml
 
             for (unsigned int i=0; i<3; i++)
               for (unsigned int j=0; j<3; j++)
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
-                    stress_tensor(i,j) +=
-                      D_ijkl_tensor.evaluate(i, j, k, l) * strain_tensor(k, l);
-
-            for (unsigned int dof_i=0; dof_i<n_var_dofs; dof_i++)
-              for (unsigned int dof_j=0; dof_j<n_var_dofs; dof_j++)
-                {
-                  for (unsigned int i=0; i<3; i++)
-                    for (unsigned int j=0; j<3; j++)
-                      for (unsigned int m=0; m<3; m++)
-                        Ke_var[i][i](dof_i,dof_j) += JxW[qp] *
-                          (-dphi[dof_j][qp](m) * stress_tensor(m,j) * dphi[dof_i][qp](j));
-
-                  for (unsigned int i=0; i<3; i++)
-                    for (unsigned int j=0; j<3; j++)
-                      for (unsigned int k=0; k<3; k++)
-                        for (unsigned int l=0; l<3; l++)
+                  {
+                    Number a_ijkl = 0.;
+                    for (unsigned int m=0; m<3; m++)
+                      for (unsigned int n=0; n<3; n++)
+                      {
+                        Number term_ijmn = 0;
+                        for (unsigned int r=0; r<3; r++)
+                          for (unsigned int s=0; s<3; s++)
                           {
-                            Number FxC_ijkl = 0.;
-                            for (unsigned int m=0; m<3; m++)
-                              FxC_ijkl += F(i,m) * D_ijkl_tensor.evaluate(m, j, k, l);
-
-                            Ke_var[i][k](dof_i,dof_j) += JxW[qp] *
-                              (-0.5 * FxC_ijkl * dphi[dof_j][qp](l) * dphi[dof_i][qp](j));
-
-                            Ke_var[i][l](dof_i,dof_j) += JxW[qp] *
-                              (-0.5 * FxC_ijkl * dphi[dof_j][qp](k) * dphi[dof_i][qp](j));
-
-                            for (unsigned int n=0; n<3; n++)
-                              Ke_var[i][n](dof_i,dof_j) += JxW[qp] *
-                                (-0.5 * FxC_ijkl * (dphi[dof_j][qp](k) * grad_u(n,l) + dphi[dof_j][qp](l) * grad_u(n,k)) * dphi[dof_i][qp](j));
+                            term_ijmn +=
+                              D_ijkl_tensor.evaluate(i,j,r,s) *
+                              hencky_strain_data.evaluate_hencky_strain_deriv(r,s,m,n);
                           }
-                }
+
+                        Number BB_mnkl = kronecker_delta(m,k)*B(n,l) + kronecker_delta(n,k)*B(m,l);
+                        a_ijkl += (1./J) * term_ijmn * BB_mnkl;
+                      }
+                    a_ijkl -= sigma(i,l) * kronecker_delta(j,k);
+
+                    for (unsigned int dof_i=0; dof_i<n_var_dofs; dof_i++)
+                      for (unsigned int dof_k=0; dof_k<n_var_dofs; dof_k++)
+                        {
+                          Ke_var[i][k](dof_i,dof_k) -=
+                            JxW[qp] * a_ijkl * dphi[dof_k][qp](l) * dphi[dof_i][qp](j);
+                        }
+                  }
           }
 
         dof_map.constrain_element_matrix (Ke, dof_indices);
