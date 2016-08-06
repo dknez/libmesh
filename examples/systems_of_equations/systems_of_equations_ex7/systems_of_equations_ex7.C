@@ -63,7 +63,8 @@
 //  \psi(hencky_strain) = 0.5 hencky_strain_ij D_ijkl hencky_strain_kl,
 // where D_ijkl is the fourth order linear elasticity tensor (e.g. see systems_of_equations_ex6).
 //
-// Note that ln(B_ij) is an isotropic tensor-valued function, defined by:
+// Note that the Hencky strain function, 0.5 ln(B_ij), is an isotropic tensor-valued
+// function, defined by:
 //  ln(B) = \sum_i=1^p ln(\lambda_i) E_i
 // where p is the number of distinct eigenvalues, \lambda_i is the i^th eigenvalue of B_ij,
 // and E_i is the i^th "eigenprojection" operator (i.e. the projection onto the eigenspace).
@@ -76,11 +77,11 @@
 //
 // Putting the above pieces together, we can now obtain the complete expression for a_ijkl.
 // First we differentiate \tau wrt B_ij, which gives:
-//  \tau_ij / \partial B_kl = 0.5 D_ijmn L_mnkl
+//  \tau_ij / \partial B_kl = D_ijmn L_mnkl
 // where:
-//   L_ijkl = \partial(ln(B_ij)) / \partial B_kl.
+//   L_ijkl = \partial(0.5 ln(B_ij)) / \partial B_kl.
 // Plugging these values into the formula above for a_ijkl gives:
-//  a_ijkl = (1/2/J) D_ijrs L_rsmn B_mnkl - \sigma_il \delta_jk.
+//  a_ijkl = (1/J) D_ijrs L_rsmn B_mnkl - \sigma_il \delta_jk.
 //
 // Based on the information above, we can assemble the residual and Jacobian for this
 // model and hence solve the nonlinear system using the Newton's method solver provided
@@ -135,39 +136,14 @@ Real kronecker_delta(unsigned int i,
   return i == j ? 1. : 0.;
 }
 
-class TensorFourthOrder
+class Dijkl
 {
 public:
 
   /**
    * Constructor.
    */
-  TensorFourthOrder();
-
-  /**
-   * Destructor.
-   */
-  virtual ~TensorFourthOrder();
-
-  /**
-   * Evaluate the tensor for the specified indices.
-   */
-  virtual Real evaluate(
-    unsigned int i,
-    unsigned int j,
-    unsigned int k,
-    unsigned int l) const = 0;
-
-};
-
-class ElasticDijkl : public TensorFourthOrder
-{
-public:
-
-  /**
-   * Constructor.
-   */
-  ElasticDijkl(Real young_modulus, Real poisson_ratio)
+  Dijkl(Real young_modulus, Real poisson_ratio)
   :
   _young_modulus(young_modulus),
   _poisson_ratio(poisson_ratio)
@@ -175,14 +151,9 @@ public:
   }
 
   /**
-   * Destructor.
-   */
-  virtual ~ElasticDijkl();
-
-  /**
    * Evaluate the tensor for the specified indices.
    */
-  virtual Real evaluate(
+  Real evaluate(
     unsigned int i,
     unsigned int j,
     unsigned int k,
@@ -206,27 +177,24 @@ private:
   * This class computes the Hencky strain, and the derivative of the Hencky strain,
   * based on the tensor B. Here we follow the implementation described in Box A.5 of NPO.
   */
-class HenckyStrainTensor : public TensorFourthOrder
+class HenckyTensors
 {
 public:
 
   /**
    * Constructor.
    */
-  HenckyStrainTensor(const DenseMatrix<Number>& B)
+  HenckyTensors(const DenseMatrix<Number>& B)
+  :
+  _B(B)
   {
-    init_hencky_strain_data(B);
+    init_hencky_strain_data();
   }
-
-  /**
-   * Destructor.
-   */
-  virtual ~HenckyStrainTensor() {}
 
   /**
    * Evaluate the second-order Hencky strain tensor for the specified indices.
    */
-  virtual Real evaluate_hencky_strain(
+  Real evaluate_hencky_strain(
     unsigned int i,
     unsigned int j) const
   {
@@ -239,31 +207,106 @@ public:
   /**
    * Evaluate the fourth-order Hencky strain derivative tensor for the specified indices.
    */
-  virtual Real evaluate(
+  Real evaluate_hencky_strain_deriv(
     unsigned int i,
     unsigned int j,
     unsigned int k,
-    unsigned int l) const libmesh_override
+    unsigned int l) const
   {
+    libmesh_assert_equal_to(_distinct_B_eigenvalues.size(), _distinct_B_eigenprojections.size());
+
+    Number dBsquared_dB_ijkl = _B(i,k) * kronecker_delta(k,l) + _B(l,j) * kronecker_delta(i,k);
+    Number I_S_ijkl = 0.5 * (kronecker_delta(i,k)*kronecker_delta(j,l) + kronecker_delta(i,l)*kronecker_delta(j,k));
+
+    // We have a separate case depending on the number of distinct eigenvalues (1, 2, or 3)
+    if(_distinct_B_eigenvalues.size() == 3)
+    {
+      for(unsigned int a=0; a<3; a++)
+      {
+        unsigned int b = (a + 1) % 3;
+        unsigned int c = (a + 2) % 3;
+
+        Number x_a = _distinct_B_eigenvalues[a];
+        Number x_b = _distinct_B_eigenvalues[b];
+        Number x_c = _distinct_B_eigenvalues[c];
+
+        const DenseMatrix<Number>& E_a = _distinct_B_eigenprojections[a];
+        const DenseMatrix<Number>& E_b = _distinct_B_eigenprojections[b];
+        const DenseMatrix<Number>& E_c = _distinct_B_eigenprojections[c];
+
+        Number y_x_a = 0.5 * log(x_a);
+        Number deriv_y_x_a = 0.5 / x_a;
+
+        Number value =
+          y_x_a / ((x_a - x_b) * (x_a - x_c)) *
+            ( dBsquared_dB_ijkl
+            - (x_b + x_c) * I_S_ijkl
+            - ((x_a - x_b) + (x_a - x_c)) * E_a(i,j) * E_a(k,l)
+            - (x_b - x_c) * E_b(i,j) * E_b(k,l)
+            - E_c(i,j) * E_c(k,l) )
+          + deriv_y_x_a * E_a(i,j) * E_a(k,l);
+        return value;
+      }
+    }
+    else if(_distinct_B_eigenvalues.size() == 2)
+    {
+      Number x_a = _distinct_B_eigenvalues[0]; // This is the distinct eigenvalue
+      Number x_c = _distinct_B_eigenvalues[1]; // This is the repeated eigenvalue
+
+      Number y_x_a = 0.5 * log(x_a);
+      Number y_x_c = 0.5 * log(x_c);
+      Number deriv_y_x_a = 0.5 / x_a;
+      Number deriv_y_x_c = 0.5 / x_c;
+
+      Number s_1 =
+        (y_x_a - y_x_c)/std::pow(x_a - x_c, 2.) - deriv_y_x_c/(x_a - x_c);
+      Number s_2 =
+          2.*x_c*(y_x_a - y_x_c)/std::pow(x_a - x_c, 2.)
+        - deriv_y_x_c*(x_a + x_c)/(x_a - x_c);
+      Number s_3 =
+          2.*(y_x_a - y_x_c)/std::pow(x_a - x_c, 3.)
+        - (deriv_y_x_a + deriv_y_x_c)/std::pow(x_a - x_c, 2.);
+      Number s_4 = x_c * s_3;
+      Number s_5 = s_4;
+      Number s_6 = x_c*x_c*s_3; 
+
+      Number value =
+          s_1 * dBsquared_dB_ijkl
+        - s_2 * I_S_ijkl
+        - s_3 * _B(i,j) * _B(k,l)
+        + s_4 * _B(i,j) * kronecker_delta(k,l)
+        + s_5 * kronecker_delta(i,j) * _B(k,l)
+        - s_6 * kronecker_delta(i,j) * kronecker_delta(k,l);
+      return value;
+    }
+    else if(_distinct_B_eigenvalues.size() == 1)
+    {
+      Number x_a = _distinct_B_eigenvalues[0];
+      Number deriv_y_x_a = 0.5 / x_a;
+
+      return (deriv_y_x_a * I_S_ijkl);
+    }
+
+    libmesh_error_msg("Should not reach here!");
     return 0.;
   }
 
-  private:
+private:
 
   /**
    * Helper to initialize the data required for evaluation of the Hencky
    * strain and its derivative.
    */
-  void init_hencky_strain_data(const DenseMatrix<Number>& B)
+  void init_hencky_strain_data()
   {
-    DenseMatrix<Number> B_squared = B;
-    B_squared.right_multiply(B);
+    DenseMatrix<Number> B_squared = _B;
+    B_squared.right_multiply(_B);
 
-    Number I1 = B(0,0) + B(1,1) + B(2,2);
+    Number I1 = _B(0,0) + _B(1,1) + _B(2,2);
     Number I2 = 0.5 * ( I1*I1 + B_squared(0,0) + B_squared(1,1) + B_squared(2,2) );
 
     // det is non-const, so make a copy of B
-    DenseMatrix<Number> B_copy = B;
+    DenseMatrix<Number> B_copy = _B;
     Number I3 = B_copy.det();
 
     Number R = (-2.*I1*I1*I1 + 9.*I1*I2 - 27.*I3) / 54.;
@@ -323,7 +366,7 @@ public:
       }
 
       DenseMatrix<Number> E_not_equal_index =
-        get_distinct_eigenprojection(B_eigenvalues[not_equal_index], B, I1, I3);
+        get_distinct_eigenprojection(B_eigenvalues[not_equal_index], I1, I3);
       _distinct_B_eigenvalues.push_back( B_eigenvalues[not_equal_index] );
       _distinct_B_eigenprojections.push_back( E_not_equal_index );
 
@@ -336,7 +379,7 @@ public:
     {
       for(unsigned int eval_index=0; eval_index<3; eval_index++)
       {
-        DenseMatrix<Number> E_i = get_distinct_eigenprojection( B_eigenvalues[eval_index], B, I1, I3);
+        DenseMatrix<Number> E_i = get_distinct_eigenprojection( B_eigenvalues[eval_index], I1, I3);
         _distinct_B_eigenvalues.push_back( B_eigenvalues[eval_index] );
         _distinct_B_eigenprojections.push_back( E_i );
       }
@@ -352,6 +395,8 @@ public:
       Number log_lambda_i = 0.5 * log( _distinct_B_eigenvalues[i] );
       _hencky_strain.add(log_lambda_i, _distinct_B_eigenprojections[i]);
     }
+
+    libmesh_assert_equal_to(_distinct_B_eigenvalues.size(), _distinct_B_eigenprojections.size());
   }
 
   /**
@@ -360,12 +405,11 @@ public:
    * eigenvalue. \p I1 and \p I3 are the first and third invariants of B.
    */
   DenseMatrix<Number> get_distinct_eigenprojection(Number eval_i,
-                                                   const DenseMatrix<Number>& B,
                                                    Number I1,
                                                    Number I3)
   {
-    DenseMatrix<Number> B_squared = B;
-    B_squared.right_multiply(B);
+    DenseMatrix<Number> B_squared = _B;
+    B_squared.right_multiply(_B);
 
     DenseMatrix<Number> identity(3,3);
     identity(0,0) = 1.;
@@ -373,14 +417,21 @@ public:
     identity(2,2) = 1.;
 
     DenseMatrix<Number> E_i = B_squared;
-    E_i.add( -(I1 - eval_i), B);
+    E_i.add( -(I1 - eval_i), _B);
     E_i.add( (I3/eval_i), identity);
     E_i.scale( eval_i / (2.*eval_i*eval_i*eval_i - I1*eval_i*eval_i + I3) );
 
     return E_i;
   }
 
-  DenseMatrix<Real> _hencky_strain;
+  // The second-order tensor that we compute the strain for, via 0.5 * ln(B)
+  const DenseMatrix<Number> _B;
+
+  // The second-order Hencky strain tensor
+  DenseMatrix<Number> _hencky_strain;
+
+  // The distinct eigenvalues and the projection operators
+  // onto the corresponding eigenspaces.
   std::vector<Number> _distinct_B_eigenvalues;
   std::vector< DenseMatrix<Number> > _distinct_B_eigenprojections;
 
@@ -501,14 +552,14 @@ public:
 
             DenseMatrix<Number> stress_tensor(3, 3);
 
-            ElasticDijkl D_ijkl(young_modulus, poisson_ratio);
+            Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
 
             for (unsigned int i=0; i<3; i++)
               for (unsigned int j=0; j<3; j++)
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
                     stress_tensor(i,j) +=
-                      D_ijkl.evaluate(i, j, k, l) * strain_tensor(k, l);
+                      D_ijkl_tensor.evaluate(i, j, k, l) * strain_tensor(k, l);
 
             for (unsigned int dof_i=0; dof_i<n_var_dofs; dof_i++)
               for (unsigned int dof_j=0; dof_j<n_var_dofs; dof_j++)
@@ -526,7 +577,7 @@ public:
                           {
                             Number FxC_ijkl = 0.;
                             for (unsigned int m=0; m<3; m++)
-                              FxC_ijkl += F(i,m) * D_ijkl.evaluate(m, j, k, l);
+                              FxC_ijkl += F(i,m) * D_ijkl_tensor.evaluate(m, j, k, l);
 
                             Ke_var[i][k](dof_i,dof_j) += JxW[qp] *
                               (-0.5 * FxC_ijkl * dphi[dof_j][qp](l) * dphi[dof_i][qp](j));
@@ -649,9 +700,9 @@ public:
             DenseMatrix<Number> B = F;
             B.right_multiply_transpose(F);
 
-            HenckyStrainTensor hencky_strain_data(B);
+            HenckyTensors hencky_strain_data(B);
 
-            ElasticDijkl D_ijkl(young_modulus, poisson_ratio);
+            Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
 
             DenseMatrix<Number> sigma(3, 3);
             for (unsigned int i=0; i<3; i++)
@@ -659,7 +710,7 @@ public:
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
                     sigma(i,j) +=
-                      J * D_ijkl.evaluate(i, j, k, l) *
+                      J * D_ijkl_tensor.evaluate(i, j, k, l) *
                       hencky_strain_data.evaluate_hencky_strain(k,l);
 
             // Now we assemble the residual, which is given by:
@@ -858,7 +909,7 @@ public:
             for (unsigned int var=0; var<3; var++)
               F(var, var) += 1.;
 
-            ElasticDijkl D_ijkl(young_modulus, poisson_ratio);
+            Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
 
             DenseMatrix<Number> stress_tensor(3, 3);
             for (unsigned int i=0; i<3; i++)
@@ -866,7 +917,7 @@ public:
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
                     stress_tensor(i,j) +=
-                      D_ijkl.evaluate(i, j, k, l) * strain_tensor(k, l);
+                      D_ijkl_tensor.evaluate(i, j, k, l) * strain_tensor(k, l);
 
             // stress_tensor now holds the second Piola-Kirchoff stress (PK2) at point qp.
             // However, in this example we want to compute the Cauchy stress which is given by
