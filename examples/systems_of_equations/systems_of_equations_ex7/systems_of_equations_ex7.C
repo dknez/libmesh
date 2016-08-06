@@ -162,8 +162,11 @@ public:
     const Real lambda_1 = (_young_modulus*_poisson_ratio)/((1.+_poisson_ratio)*(1.-2.*_poisson_ratio));
     const Real lambda_2 = _young_modulus/(2.*(1.+_poisson_ratio));
 
-    return lambda_1 * kronecker_delta(i,j) * kronecker_delta(k,l) +
+    Real value =
+      lambda_1 * kronecker_delta(i,j) * kronecker_delta(k,l) +
       lambda_2 * (kronecker_delta(i,k) * kronecker_delta(j,l) + kronecker_delta(i,l) * kronecker_delta(j,k));
+
+    return value;
   }
 
 private:
@@ -305,28 +308,42 @@ private:
     B_squared.right_multiply(_B);
 
     Number I1 = _B(0,0) + _B(1,1) + _B(2,2);
-    Number I2 = 0.5 * ( I1*I1 + B_squared(0,0) + B_squared(1,1) + B_squared(2,2) );
+    Number I2 = 0.5 * ( I1*I1 - B_squared(0,0) - B_squared(1,1) - B_squared(2,2) );
 
     // det is non-const, so make a copy of B
     DenseMatrix<Number> B_copy = _B;
     Number I3 = B_copy.det();
 
     Number R = (-2.*I1*I1*I1 + 9.*I1*I2 - 27.*I3) / 54.;
-    Number Q = I1*I1 - 3.*I2;
-    Number theta = acos(R / std::sqrt(Q*Q*Q));
+    Number Q = (I1*I1 - 3.*I2) / 9.;
 
     std::vector<Number> B_eigenvalues(3);
-    B_eigenvalues[0] = -2. * std::sqrt(Q) * cos(theta/3.) + I1 / 3.;
-    B_eigenvalues[1] = -2. * std::sqrt(Q) * cos( (theta+2.*pi)/3.) + I1 / 3.;
-    B_eigenvalues[2] = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1 / 3.;
+    Real TOL = 1.e-10;
+    if( std::abs(Q) > TOL )
+    {
+      Number theta_argument = R / std::sqrt(Q*Q*Q);
+      libmesh_assert_greater_equal( theta_argument, -1.);
+      libmesh_assert_less_equal( theta_argument, 1. );
 
-    Real lambda_tol = 1.e-10;
+      Number theta = acos( theta_argument );
+
+      B_eigenvalues[0] = -2. * std::sqrt(Q) * cos(theta/3.) + I1 / 3.;
+      B_eigenvalues[1] = -2. * std::sqrt(Q) * cos( (theta+2.*pi)/3.) + I1 / 3.;
+      B_eigenvalues[2] = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1 / 3.;
+    }
+    else
+    {
+      B_eigenvalues[0] = I1 / 3.;
+      B_eigenvalues[1] = I1 / 3.;
+      B_eigenvalues[2] = I1 / 3.;
+    }
+
     bool equal_01 =
-      ( std::abs(B_eigenvalues[0] - B_eigenvalues[1])/std::abs(B_eigenvalues[0]) < lambda_tol );
+      ( std::abs(B_eigenvalues[0] - B_eigenvalues[1])/std::abs(B_eigenvalues[0]) < TOL );
     bool equal_02 =
-      ( std::abs(B_eigenvalues[0] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < lambda_tol );
+      ( std::abs(B_eigenvalues[0] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < TOL );
     bool equal_12 =
-      ( std::abs(B_eigenvalues[1] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < lambda_tol );
+      ( std::abs(B_eigenvalues[1] - B_eigenvalues[2])/std::abs(B_eigenvalues[0]) < TOL );
 
     DenseMatrix<Number> identity(3,3);
     identity(0,0) = 1.;
@@ -390,6 +407,8 @@ private:
     _hencky_strain.resize(3,3);
     for(unsigned int i=0; i<_distinct_B_eigenvalues.size(); i++)
     {
+      libmesh_assert_greater( _distinct_B_eigenvalues[i], 0.);
+
       Number log_lambda_i = 0.5 * log( _distinct_B_eigenvalues[i] );
       _hencky_strain.add(log_lambda_i, _distinct_B_eigenprojections[i]);
     }
