@@ -304,38 +304,21 @@ private:
    */
   void init_hencky_strain_data()
   {
-    DenseMatrix<Number> B_squared = _B;
-    B_squared.right_multiply(_B);
-
-    Number I1 = _B(0,0) + _B(1,1) + _B(2,2);
-    Number I2 = 0.5 * ( I1*I1 - B_squared(0,0) - B_squared(1,1) - B_squared(2,2) );
-
-    // det is non-const, so make a copy of B
-    DenseMatrix<Number> B_copy = _B;
-    Number I3 = B_copy.det();
-
-    Number R = (-2.*I1*I1*I1 + 9.*I1*I2 - 27.*I3) / 54.;
-    Number Q = (I1*I1 - 3.*I2) / 9.;
+    Real TOL = 1.e-10;
 
     std::vector<Number> B_eigenvalues(3);
-    Real TOL = 1.e-10;
-    if( std::abs(Q) > TOL )
     {
-      Number theta_argument = R / std::sqrt(Q*Q*Q);
-      libmesh_assert_greater_equal( theta_argument, -1.);
-      libmesh_assert_less_equal( theta_argument, 1. );
+      DenseVector<Number> lambda_real;
+      DenseVector<Number> lambda_imag;
 
-      Number theta = acos( theta_argument );
-
-      B_eigenvalues[0] = -2. * std::sqrt(Q) * cos(theta/3.) + I1 / 3.;
-      B_eigenvalues[1] = -2. * std::sqrt(Q) * cos( (theta+2.*pi)/3.) + I1 / 3.;
-      B_eigenvalues[2] = -2. * std::sqrt(Q) * cos( (theta-2.*pi)/3.) + I1 / 3.;
-    }
-    else
-    {
-      B_eigenvalues[0] = I1 / 3.;
-      B_eigenvalues[1] = I1 / 3.;
-      B_eigenvalues[2] = I1 / 3.;
+      DenseMatrix<Number> B_copy = _B;
+      B_copy.evd(lambda_real, lambda_imag);
+      for(unsigned int i=0; i<3; i++)
+      {
+        // The eigenvalues should be real since B = F F^T is symmetric
+        libmesh_assert_less( std::abs(lambda_imag(i)), TOL );
+        B_eigenvalues[i] = lambda_real(i);
+      }
     }
 
     bool equal_01 =
@@ -381,7 +364,7 @@ private:
       unsigned int equal_index = (not_equal_index + 1) % 3;
 
       DenseMatrix<Number> E_not_equal_index =
-        get_distinct_eigenprojection(B_eigenvalues[not_equal_index], I1, I3);
+        get_distinct_eigenprojection(B_eigenvalues[not_equal_index]);
       _distinct_B_eigenvalues.push_back( B_eigenvalues[not_equal_index] );
       _distinct_B_eigenprojections.push_back( E_not_equal_index );
 
@@ -394,7 +377,7 @@ private:
     {
       for(unsigned int eval_index=0; eval_index<3; eval_index++)
       {
-        DenseMatrix<Number> E_i = get_distinct_eigenprojection( B_eigenvalues[eval_index], I1, I3);
+        DenseMatrix<Number> E_i = get_distinct_eigenprojection( B_eigenvalues[eval_index]);
         _distinct_B_eigenvalues.push_back( B_eigenvalues[eval_index] );
         _distinct_B_eigenprojections.push_back( E_i );
       }
@@ -421,9 +404,7 @@ private:
    * to the eigenvalue \p eval_i. This method assumes that eval_i is a distinct
    * eigenvalue. \p I1 and \p I3 are the first and third invariants of B.
    */
-  DenseMatrix<Number> get_distinct_eigenprojection(Number eval_i,
-                                                   Number I1,
-                                                   Number I3)
+  DenseMatrix<Number> get_distinct_eigenprojection(Number eval_i)
   {
     DenseMatrix<Number> B_squared = _B;
     B_squared.right_multiply(_B);
@@ -432,6 +413,15 @@ private:
     identity(0,0) = 1.;
     identity(1,1) = 1.;
     identity(2,2) = 1.;
+
+    Number I1 = _B(0,0) + _B(1,1) + _B(2,2);
+
+    // det is non-const, so make a copy of B
+    Number I3 = 0.;
+    {
+      DenseMatrix<Number> B_copy = _B;
+      I3 = B_copy.det();
+    }
 
     DenseMatrix<Number> E_i = B_squared;
     E_i.add( -(I1 - eval_i), _B);
@@ -862,6 +852,8 @@ public:
     NonlinearImplicitSystem & system =
       es.get_system<NonlinearImplicitSystem>("FiniteStrainElasticity");
 
+    move_mesh(*system.solution, /*scaling_factor*/ 1.);
+
     unsigned int displacement_vars[3];
     displacement_vars[0] = system.variable_number ("u");
     displacement_vars[1] = system.variable_number ("v");
@@ -893,7 +885,7 @@ public:
     std::vector<dof_id_type> stress_dof_indices_var;
 
     // To store the stress tensor on each element
-    DenseMatrix<Number> elem_avg_stress_tensor(3, 3);
+    DenseMatrix<Number> elem_avg_sigma(3, 3);
 
     MeshBase::const_element_iterator       el     = mesh.active_local_elements_begin();
     const MeshBase::const_element_iterator end_el = mesh.active_local_elements_end();
@@ -910,7 +902,7 @@ public:
         fe->reinit (elem);
 
         // clear the stress tensor
-        elem_avg_stress_tensor.resize(3, 3);
+        elem_avg_sigma.resize(3, 3);
 
         for (unsigned int qp=0; qp<qrule.n_points(); qp++)
           {
@@ -921,46 +913,36 @@ public:
                 for (unsigned int j=0; j<n_var_dofs; j++)
                   grad_u(var_i,var_j) += dphi[j][qp](var_j) * system.current_solution(dof_indices_var[var_i][j]);
 
-            DenseMatrix<Number> strain_tensor(3, 3);
-            for (unsigned int i=0; i<3; i++)
-              for (unsigned int j=0; j<3; j++)
-                {
-                  strain_tensor(i,j) += 0.5 * (grad_u(i,j) + grad_u(j,i));
-
-                  for (unsigned int k=0; k<3; k++)
-                    strain_tensor(i,j) += 0.5 * grad_u(k,i)*grad_u(k,j);
-                }
-
-            // Define the deformation gradient
             DenseMatrix<Number> F(3, 3);
             F = grad_u;
             for (unsigned int var=0; var<3; var++)
               F(var, var) += 1.;
 
+            Real J = F.det();
+
+            DenseMatrix<Number> B = F;
+            B.right_multiply_transpose(F);
+
+            HenckyTensors hencky_strain_data(B);
+
             Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
 
-            DenseMatrix<Number> stress_tensor(3, 3);
+            DenseMatrix<Number> sigma(3, 3);
             for (unsigned int i=0; i<3; i++)
               for (unsigned int j=0; j<3; j++)
                 for (unsigned int k=0; k<3; k++)
                   for (unsigned int l=0; l<3; l++)
-                    stress_tensor(i,j) +=
-                      D_ijkl_tensor.evaluate(i, j, k, l) * strain_tensor(k, l);
-
-            // stress_tensor now holds the second Piola-Kirchoff stress (PK2) at point qp.
-            // However, in this example we want to compute the Cauchy stress which is given by
-            // 1/det(F) * F * PK2 * F^T, hence we now apply this transformation.
-            stress_tensor.scale(1./F.det());
-            stress_tensor.left_multiply(F);
-            stress_tensor.right_multiply_transpose(F);
+                    sigma(i,j) +=
+                      J * D_ijkl_tensor.evaluate(i, j, k, l) *
+                      hencky_strain_data.evaluate_hencky_strain(k,l);
 
             // We want to plot the average Cauchy stress on each element, hence
-            // we integrate stress_tensor
-            elem_avg_stress_tensor.add(JxW[qp], stress_tensor);
+            // we integrate sigma
+            elem_avg_sigma.add(JxW[qp], sigma);
           }
 
         // Get the average stress per element by dividing by volume
-        elem_avg_stress_tensor.scale(1./elem->volume());
+        elem_avg_sigma.scale(1./elem->volume());
 
         // load elem_sigma data into stress_system
         unsigned int stress_var_index = 0;
@@ -975,7 +957,7 @@ public:
 
               if ((stress_system.solution->first_local_index() <= dof_index) &&
                   (dof_index < stress_system.solution->last_local_index()))
-                stress_system.solution->set(dof_index, elem_avg_stress_tensor(i,j));
+                stress_system.solution->set(dof_index, elem_avg_sigma(i,j));
 
               stress_var_index++;
             }
@@ -984,6 +966,8 @@ public:
     // Should call close and update when we set vector entries directly
     stress_system.solution->close();
     stress_system.update();
+
+    move_mesh(*system.solution, /*scaling_factor*/ -1.);
   }
 
 };
@@ -1123,6 +1107,9 @@ int main (int argc, char ** argv)
 #ifdef LIBMESH_HAVE_EXODUS_API
       std::stringstream filename;
       filename << "solution_" << count << ".exo";
+
+      // Move the mesh before plotting
+      fse.move_mesh(*system.solution, /*scaling_factor*/ 1.);
       ExodusII_IO (mesh).write_equation_systems(filename.str(), equation_systems);
 #endif
     }
