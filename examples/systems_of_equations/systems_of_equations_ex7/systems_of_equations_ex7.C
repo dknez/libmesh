@@ -553,12 +553,14 @@ public:
             for (unsigned int var=0; var<3; var++)
               F(var, var) += 1.;
 
-            Real J = F.det();
-
             DenseMatrix<Number> B = F;
             B.right_multiply_transpose(F);
 
             HenckyTensors hencky_strain_data(B);
+
+            // Note that we must not call F.det() before we compute B, because
+            // F.det() will change F.
+            Real J = F.det();
 
             Dijkl D_ijkl_tensor(young_modulus, poisson_ratio);
 
