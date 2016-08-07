@@ -218,8 +218,15 @@ public:
   {
     libmesh_assert_equal_to(_distinct_B_eigenvalues.size(), _distinct_B_eigenprojections.size());
 
-    Number dBsquared_dB_ijkl = _B(i,k) * kronecker_delta(k,l) +
+    // // We use the expression given in (A.46)
+    // Number dBsquared_dB_ijkl = 0.5 * (kronecker_delta(i,k) * _B(l,j) +
+    //                                   kronecker_delta(i,l) * _B(k,j) +
+    //                                   kronecker_delta(j,l) * _B(i,k) +
+    //                                   kronecker_delta(k,j) * _B(i,l));
+    // We use the expression given in (2.137)
+    Number dBsquared_dB_ijkl = _B(i,k) * kronecker_delta(j,l) +
                                _B(l,j) * kronecker_delta(i,k);
+
     Number I_S_ijkl = 0.5 * (kronecker_delta(i,k)*kronecker_delta(j,l) +
                              kronecker_delta(i,l)*kronecker_delta(j,k));
 
@@ -247,8 +254,7 @@ public:
             ( dBsquared_dB_ijkl
             - (x_b + x_c) * I_S_ijkl
             - ((x_a - x_b) + (x_a - x_c)) * E_a(i,j) * E_a(k,l)
-            - (x_b - x_c) * E_b(i,j) * E_b(k,l)
-            - E_c(i,j) * E_c(k,l) )
+            - (x_b - x_c) * (E_b(i,j) * E_b(k,l) - E_c(i,j) * E_c(k,l)) )
           + deriv_y_x_a * E_a(i,j) * E_a(k,l);
         return value;
       }
