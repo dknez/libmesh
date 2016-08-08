@@ -554,10 +554,7 @@ public:
                     grad_u(var_i,var_j) += dphi[j][qp](var_j)*soln(dof_indices_var[var_i][j]);
               }
 
-            DenseMatrix<Number> F(3, 3);
-            F = grad_u;
-            for (unsigned int var=0; var<3; var++)
-              F(var, var) += 1.;
+            DenseMatrix<Number> F = get_deformation_gradient(grad_u);
 
             DenseMatrix<Number> B = F;
             B.right_multiply_transpose(F);
@@ -716,10 +713,7 @@ public:
                     grad_u(var_i,var_j) += dphi[j][qp](var_j)*soln(dof_indices_var[var_i][j]);
               }
 
-            DenseMatrix<Number> F(3, 3);
-            F = grad_u;
-            for (unsigned int var=0; var<3; var++)
-              F(var, var) += 1.;
+            DenseMatrix<Number> F = get_deformation_gradient(grad_u);
 
             DenseMatrix<Number> B = F;
             B.right_multiply_transpose(F);
@@ -923,10 +917,7 @@ public:
                 for (unsigned int j=0; j<n_var_dofs; j++)
                   grad_u(var_i,var_j) += dphi[j][qp](var_j) * system.current_solution(dof_indices_var[var_i][j]);
 
-            DenseMatrix<Number> F(3, 3);
-            F = grad_u;
-            for (unsigned int var=0; var<3; var++)
-              F(var, var) += 1.;
+            DenseMatrix<Number> F = get_deformation_gradient(grad_u);
 
             DenseMatrix<Number> B = F;
             B.right_multiply_transpose(F);
@@ -980,6 +971,37 @@ public:
     stress_system.update();
 
     move_mesh(*system.solution, /*scaling_factor*/ -1.);
+  }
+
+  /**
+   * Use the relation F^{-1} = I - \partial u / \partial x to get F.
+   */
+  DenseMatrix<Number> get_deformation_gradient(const DenseMatrix<Number>& grad_u)
+  {
+    DenseMatrix<Number> F_inv(3, 3);
+    F_inv(0,0) = 1.;
+    F_inv(1,1) = 1.;
+    F_inv(2,2) = 1.;
+    for (unsigned int var=0; var<3; var++)
+      F_inv(var, var) += 1.;
+
+    F_inv.add(-1., grad_u);
+
+    DenseMatrix<Number> F(3, 3);
+    {
+      // Use an analytical formula to invert the 3x3 matrix.
+      Real a11 = F_inv(0,0), a12 = F_inv(0,1), a13 = F_inv(0,2);
+      Real a21 = F_inv(1,0), a22 = F_inv(1,1), a23 = F_inv(1,2);
+      Real a31 = F_inv(2,0), a32 = F_inv(2,1), a33 = F_inv(2,2);
+      Real DET = a11*(a33*a22-a32*a23)-a21*(a33*a12-a32*a13)+a31*(a23*a12-a22*a13);
+
+      F(0,0) =   a33*a22-a32*a23;  F(0,1) = -(a33*a12-a32*a13); F(0,2) =   a23*a12-a22*a13;
+      F(1,0) = -(a33*a21-a31*a23); F(1,1) =   a33*a11-a31*a13;  F(1,2) = -(a23*a11-a21*a13);
+      F(2,0) =   a32*a21-a31*a22;  F(2,1) = -(a32*a11-a31*a12); F(2,2) =   a22*a11-a21*a12;
+
+      F.scale(1./DET);
+    }
+    return F;
   }
 
 };
