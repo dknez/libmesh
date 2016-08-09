@@ -982,8 +982,6 @@ public:
     F_inv(0,0) = 1.;
     F_inv(1,1) = 1.;
     F_inv(2,2) = 1.;
-    for (unsigned int var=0; var<3; var++)
-      F_inv(var, var) += 1.;
 
     F_inv.add(-1., grad_u);
 
