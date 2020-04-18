@@ -608,6 +608,17 @@ void RBConstruction::add_scaled_matrix_and_vector(Number scalar,
   if (!assemble_matrix && !assemble_vector)
     return;
 
+  if(!apply_dof_constraints)
+  {
+    // In this case we stash our constraints and unstash them below.
+    // By default this will impose no constraints since by default
+    // the set of stashed constraints is empty. But it is also
+    // more general because it allows us to impose a subset of constraints
+    // if desired by storing a subset of constraints in the stashed
+    // set.
+    get_dof_map().swap_dof_constraints();
+  }
+
   const MeshBase & mesh = this->get_mesh();
 
   // First add any node-based terms (e.g. point loads)
@@ -746,15 +757,12 @@ void RBConstruction::add_scaled_matrix_and_vector(Number scalar,
           context.get_elem_jacobian() *= 0.5;
         }
 
-      if (apply_dof_constraints)
-        {
-          // Apply constraints, e.g. Dirichlet and periodic constraints
-          this->get_dof_map().constrain_element_matrix_and_vector
-            (context.get_elem_jacobian(),
-             context.get_elem_residual(),
-             context.get_dof_indices(),
-             /*asymmetric_constraint_rows*/ false );
-        }
+      // Apply constraints, e.g. Dirichlet and periodic constraints
+      this->get_dof_map().constrain_element_matrix_and_vector
+        (context.get_elem_jacobian(),
+          context.get_elem_residual(),
+          context.get_dof_indices(),
+          /*asymmetric_constraint_rows*/ false );
 
       // Scale and add to global matrix and/or vector
       context.get_elem_jacobian() *= scalar;
@@ -805,6 +813,12 @@ void RBConstruction::add_scaled_matrix_and_vector(Number scalar,
     input_matrix->close();
   if (assemble_vector)
     input_vector->close();
+
+  if(!apply_dof_constraints)
+  {
+    // "Undo" the stashing from above.
+    get_dof_map().swap_dof_constraints();
+  }
 }
 
 void RBConstruction::set_context_solution_vec(NumericVector<Number> & vec)
