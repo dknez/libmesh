@@ -38,34 +38,23 @@ class Elem;
 class RBTheta;
 
 /**
- * This class is part of the rbOOmit framework.
- *
- * RBEIMEvaluation extends RBEvaluation to
- * encapsulate the code and data required
- * to perform "online" evaluations for
- * EIM approximations.
- *
- * \author David J. Knezevic
- * \date 2011
+ * This class enables evaluation of an Empirical Interpolation Method (EIM)
+ * approximation. RBEvaluation plays an analogous role in the context of
+ * the regular reduced basis method.
  */
-class RBEIMEvaluation : public RBEvaluation
+class RBEIMEvaluation
 {
 public:
 
   /**
    * Constructor.
    */
-  RBEIMEvaluation (const libMesh::Parallel::Communicator & comm_in);
+  RBEIMEvaluation();
 
   /**
    * Destructor.
    */
   virtual ~RBEIMEvaluation ();
-
-  /**
-   * The type of the parent.
-   */
-  typedef RBEvaluation Parent;
 
   /**
    * Clear this object.
@@ -93,42 +82,32 @@ public:
   unsigned int get_n_parametrized_functions() const;
 
   /**
-   * Get a writable reference to the interpolation points mesh.
-   */
-  ReplicatedMesh & get_interpolation_points_mesh();
-
-  /**
    * \returns The value of the parametrized function that is being
    * approximated at the point \p p.
    * \p var_index specifies the
    * variable (i.e. the parametrized function index) to be evaluated.
-   * \p elem specifies the element of the mesh that contains p.
+   * \p subdomain_id specifies the mesh subdomain that p belongs to,
+   * since this enables us to define parametrized functions in a
+   * piecewise manner based on subdomains.
    */
   Number evaluate_parametrized_function(unsigned int var_index,
                                         const Point & p,
-                                        const Elem & elem);
+                                        subdomain_id_type subdomain_id);
 
   /**
    * Calculate the EIM approximation to parametrized_function
    * using the first \p N EIM basis functions. Store the
-   * solution coefficients in the member RB_solution.
+   * solution coefficients in the member _eim_solution.
    * \returns The EIM a posteriori error bound.
    */
-  using RBEvaluation::rb_solve;
-  virtual Real rb_solve(unsigned int N) override;
+  virtual Real eim_solve(unsigned int N);
 
   /**
    * Calculate the EIM approximation for the given
    * right-hand side vector \p EIM_rhs. Store the
-   * solution coefficients in the member RB_solution.
+   * solution coefficients in the member _eim_solution.
    */
-  void rb_solve(DenseVector<Number> & EIM_rhs);
-
-  /**
-   * \returns A scaling factor that we can use to provide a consistent
-   * scaling of the RB error bound across different parameter values.
-   */
-  virtual Real get_error_bound_normalization() override;
+  void eim_solve(DenseVector<Number> & EIM_rhs);
 
   /**
    * Build a vector of RBTheta objects that accesses the components
@@ -150,62 +129,55 @@ public:
   virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
 
   /**
-   * Write out all the data to text files in order to segregate the
-   * Offline stage from the Online stage.
-   *
-   * \note This is a legacy method, use RBDataSerialization instead.
+   * Return the value of the basis function for the specified variable and point.
    */
-  virtual void legacy_write_offline_data_to_files(const std::string & directory_name = "offline_data",
-                                                  const bool write_binary_data=true) override;
+  Number get_eim_basis_function_value(unsigned int basis_function_index,
+                                      dof_id_type elem_id,
+                                      unsigned int qp,
+                                      unsigned int var) const;
 
   /**
-   * Read in the saved Offline reduced basis data
-   * to initialize the system for Online solves.
-   *
-   * \note This is a legacy method, use RBDataSerialization instead.
+   * Return a const reference to the EIM solution coefficients from the most
+   * recent solve.
    */
-  virtual void legacy_read_offline_data_from_files(const std::string & directory_name = "offline_data",
-                                                   bool read_error_bound_data=true,
-                                                   const bool read_binary_data=true) override;
+  const DenseVector<Number> & get_eim_solution() const;
 
-  //----------- PUBLIC DATA MEMBERS -----------//
+  /**
+   * Boolean to indicate whether we evaluate a posteriori error bounds
+   * when rb_solve is called.
+   */
+  bool evaluate_RB_error_bound;
+
+private:
+
+  /**
+   * The EIM solution coefficients from the most recent eim_solve().
+   */
+  DenseVector<Number> _eim_solution;
 
   /**
    * Dense matrix that stores the lower triangular
    * interpolation matrix that can be used
    */
-  DenseMatrix<Number> interpolation_matrix;
+  DenseMatrix<Number> _interpolation_matrix;
 
   /**
    * The list of interpolation points, i.e. locations at
    * which the basis functions are maximized.
    */
-  std::vector<Point> interpolation_points;
+  std::vector<Point> _interpolation_points;
 
   /**
    * The corresponding list of variables indices at which
    * the interpolation points were identified.
    */
-  std::vector<unsigned int> interpolation_points_var;
+  std::vector<unsigned int> _interpolation_points_var;
 
   /**
-   * The corresponding list of elements at which
+   * The corresponding list of subdomain IDs at which
    * the interpolation points were identified.
    */
-  std::vector<Elem *> interpolation_points_elem;
-
-private:
-
-  /**
-   * Write out interpolation_points_elem by putting the elements into
-   * a mesh and writing out the mesh.
-   */
-  void legacy_write_out_interpolation_points_elem(const std::string & directory_name);
-
-  /**
-   * Read int interpolation_points_elem from a mesh.
-   */
-  void legacy_read_in_interpolation_points_elem(const std::string & directory_name);
+  std::vector<subdomain_id> _interpolation_points_subdomain_id;
 
   /**
    * This vector stores the parametrized functions
@@ -220,34 +192,14 @@ private:
   std::vector<std::unique_ptr<RBTheta>> _rb_eim_theta_objects;
 
   /**
-   * We initialize RBEIMEvaluation so that it has an "empty" RBThetaExpansion, because
-   * this isn't used at all in the EIM.
+   * The EIM basis functions. We store values at quadrature points
+   * on elements that are local to this processor. The indexing
+   * is as following:
+   * basis function index --> element ID --> quadrature point --> variable --> value
+   * We use a map to index the element ID, since the IDs on this processor in
+   * generally will not start at zero.
    */
-  RBThetaExpansion _empty_rb_theta_expansion;
-
-  /**
-   * Store the parameters at which the previous solve was performed (so we can avoid
-   * an unnecessary repeat solve).
-   */
-  RBParameters _previous_parameters;
-
-  /**
-   * Store the number of basis functions used for the previous solve (so we can avoid
-   * an unnecessary repeat solve).
-   */
-  unsigned int _previous_N;
-
-  /**
-   * Store the previous error bound returned by rb_solve (so we can return it if we
-   * are avoiding an unnecessary repeat solve).
-   */
-  Real _previous_error_bound;
-
-  /**
-   * Mesh object that we use to store copies of the elements associated with
-   * interpolation points.
-   */
-  ReplicatedMesh _interpolation_points_mesh;
+  std::vector<std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> > _local_eim_basis_functions;
 
 };
 

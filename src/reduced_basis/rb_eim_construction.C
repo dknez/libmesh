@@ -53,38 +53,10 @@ namespace libMesh
 RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
                                       const std::string & name_in,
                                       const unsigned int number_in)
-  : Parent(es, name_in, number_in),
+  : System(es, name_in, number_in),
     best_fit_type_flag(PROJECTION_BEST_FIT),
-    _parametrized_functions_in_training_set_initialized(false),
-    _point_locator_tol(TOLERANCE)
+    _parametrized_functions_in_training_set_initialized(false)
 {
-  _explicit_system_name = name_in + "_explicit_sys";
-
-  // We cannot do rb_solve with an empty
-  // "rb space" with EIM
-  use_empty_rb_solve_in_greedy = false;
-
-  // Indicate that we need to compute the RB
-  // inner product matrix in this case
-  compute_RB_inner_product = true;
-
-  // Indicate that we need the training set
-  // for the Greedy to be the same on all
-  // processors
-  serial_training_set = true;
-
-  // attach empty RBAssemblyExpansion object
-  set_rb_assembly_expansion(_empty_rb_assembly_expansion);
-
-  // We set implicit_neighbor_dofs = false. This is important when we use
-  // DISCONTINUOUS basis functions, since by default libMesh sets
-  // implicit_neighbor_dofs = true for "all discontinuous" systems, which
-  // results in a larger sparsity: dofs on neighboring elements are added
-  // to the sparsity pattern since this is typically required for DG or FV
-  // discretizations. Since we're only doing L2 projects here, we do not
-  // need extra dofs in the sparsity pattern, so we set implicit neighbor
-  // dofs to false.
-  get_dof_map().set_implicit_neighbor_dofs(false);
 }
 
 RBEIMConstruction::~RBEIMConstruction ()
@@ -96,17 +68,12 @@ void RBEIMConstruction::clear()
 {
   Parent::clear();
 
-  // clear the mesh function
-  _mesh_function.reset();
-
   // clear the eim assembly vector
   _rb_eim_assembly_objects.clear();
 
   // clear the parametrized functions from the training set
   _parametrized_functions_in_training_set.clear();
   _parametrized_functions_in_training_set_initialized = false;
-
-  _matrix_times_bfs.clear();
 }
 
 void RBEIMConstruction::process_parameters_file (const std::string & parameters_filename)
@@ -136,7 +103,7 @@ void RBEIMConstruction::set_best_fit_type_flag (const std::string & best_fit_typ
 
 void RBEIMConstruction::print_info()
 {
-  Parent::print_info();
+  System::print_info();
 
   // Print out setup info
   libMesh::out << std::endl << "RBEIMConstruction parameters:" << std::endl;
@@ -150,17 +117,6 @@ void RBEIMConstruction::print_info()
         libMesh::out << "best fit type: eim" << std::endl;
       }
   libMesh::out << std::endl;
-}
-
-void RBEIMConstruction::init_data()
-{
-  // Add the ExplicitSystem that we use to store the EIM basis functions
-  get_equation_systems().add_system<ExplicitSystem>(_explicit_system_name);
-
-  init_implicit_system();
-  init_explicit_system();
-
-  Parent::init_data();
 }
 
 void RBEIMConstruction::initialize_rb_construction(bool skip_matrix_assembly,
@@ -745,9 +701,9 @@ void RBEIMConstruction::init_context_with_sys(FEMContext & c, System & sys)
         }
 }
 
-void RBEIMConstruction::update_RB_system_matrices()
+void RBEIMConstruction::update_eim_matrices()
 {
-  LOG_SCOPE("update_RB_system_matrices()", "RBEIMConstruction");
+  LOG_SCOPE("update_eim_matrices()", "RBEIMConstruction");
 
   // First, update the inner product matrix
   {
@@ -808,7 +764,7 @@ void RBEIMConstruction::update_RB_system_matrices()
     }
 }
 
-Real RBEIMConstruction::get_RB_error_bound()
+Real RBEIMConstruction::get_eim_error_bound()
 {
   Real best_fit_error = compute_best_fit_error();
   return best_fit_error;
@@ -837,99 +793,6 @@ void RBEIMConstruction::init_context(FEMContext & c)
         side_fe->get_phi();
         side_fe->get_xyz();
       }
-}
-
-void RBEIMConstruction::update_system()
-{
-  libMesh::out << "Updating RB matrices" << std::endl;
-  update_RB_system_matrices();
-}
-
-void RBEIMConstruction::set_explicit_sys_subvector(NumericVector<Number> & dest,
-                                                   unsigned int var,
-                                                   NumericVector<Number> & source)
-{
-  LOG_SCOPE("set_explicit_sys_subvector()", "RBEIMConstruction");
-
-  // For convenience we localize the source vector first to make it easier to
-  // copy over (no need to do distinct send/receives).
-  std::unique_ptr<NumericVector<Number>> localized_source =
-    NumericVector<Number>::build(this->comm());
-  localized_source->init(this->n_dofs(), false, SERIAL);
-  source.localize(*localized_source);
-
-  for (auto i : make_range(_dof_map_between_systems[var].size()))
-    {
-      dof_id_type implicit_sys_dof_index = i;
-      dof_id_type explicit_sys_dof_index = _dof_map_between_systems[var][i];
-
-      if ((dest.first_local_index() <= explicit_sys_dof_index) &&
-          (explicit_sys_dof_index < dest.last_local_index()))
-        dest.set(explicit_sys_dof_index,
-                 (*localized_source)(implicit_sys_dof_index));
-    }
-
-  dest.close();
-}
-
-void RBEIMConstruction::get_explicit_sys_subvector(NumericVector<Number> & dest,
-                                                   unsigned int var,
-                                                   NumericVector<Number> & localized_source)
-{
-  LOG_SCOPE("get_explicit_sys_subvector()", "RBEIMConstruction");
-
-  for (auto i : make_range(_dof_map_between_systems[var].size()))
-    {
-      dof_id_type implicit_sys_dof_index = i;
-      dof_id_type explicit_sys_dof_index = _dof_map_between_systems[var][i];
-
-      if ((dest.first_local_index() <= implicit_sys_dof_index) &&
-          (implicit_sys_dof_index < dest.last_local_index()))
-        dest.set(implicit_sys_dof_index,
-                 localized_source(explicit_sys_dof_index));
-    }
-
-  dest.close();
-}
-
-void RBEIMConstruction::init_dof_map_between_systems()
-{
-  LOG_SCOPE("init_dof_map_between_systems()", "RBEIMConstruction");
-
-  unsigned int n_vars = get_explicit_system().n_vars();
-  unsigned int n_sys_dofs = this->n_dofs();
-
-  _dof_map_between_systems.resize(n_vars);
-  for (unsigned int var=0; var<n_vars; var++)
-    {
-      _dof_map_between_systems[var].resize(n_sys_dofs);
-    }
-
-  std::vector<dof_id_type> implicit_sys_dof_indices;
-  std::vector<dof_id_type> explicit_sys_dof_indices;
-
-  for (const auto & elem : get_mesh().active_element_ptr_range())
-    {
-      this->get_dof_map().dof_indices (elem, implicit_sys_dof_indices);
-
-      const std::size_t n_dofs = implicit_sys_dof_indices.size();
-
-      for (unsigned int var=0; var<n_vars; var++)
-        {
-          get_explicit_system().get_dof_map().dof_indices (elem, explicit_sys_dof_indices, var);
-
-          libmesh_assert(explicit_sys_dof_indices.size() == n_dofs);
-
-          for (std::size_t i=0; i<n_dofs; i++)
-            {
-              dof_id_type implicit_sys_dof_index = implicit_sys_dof_indices[i];
-              dof_id_type explicit_sys_dof_index = explicit_sys_dof_indices[i];
-
-              _dof_map_between_systems[var][implicit_sys_dof_index] =
-                explicit_sys_dof_index;
-            }
-        }
-    }
 }
 
 } // namespace libMesh

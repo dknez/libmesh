@@ -45,7 +45,7 @@ namespace libMesh
  * \author David J. Knezevic
  * \date 2010
  */
-class RBEIMConstruction : public RBConstruction
+class RBEIMConstruction : public System
 {
 public:
 
@@ -63,16 +63,6 @@ public:
    * Destructor.
    */
   virtual ~RBEIMConstruction ();
-
-  /**
-   * The type of system.
-   */
-  typedef RBEIMConstruction sys_type;
-
-  /**
-   * The type of the parent.
-   */
-  typedef RBConstruction Parent;
 
   /**
    * Clear this object.
@@ -97,16 +87,9 @@ public:
   virtual void print_info() override;
 
   /**
-   * Initialize this system so that we can perform
-   * the Construction stage of the RB method.
+   * Generate the EIM approximation for the specified parametrized function.
    */
-  virtual void initialize_rb_construction(bool skip_matrix_assembly=false,
-                                          bool skip_vector_assembly=false) override;
-
-  /**
-   * Override train_reduced_basis to first initialize _parametrized_functions_in_training_set.
-   */
-  virtual Real train_reduced_basis(const bool resize_rb_eval_data=true) override;
+  virtual Real train_eim_approximation();
 
   /**
    * Load the truth representation of the parametrized function
@@ -133,35 +116,6 @@ public:
   virtual void init_context_with_sys(FEMContext & c, System & sys);
 
   /**
-   * Add variables to the ExplicitSystem that is used to store
-   * the basis functions.
-   */
-  virtual void init_explicit_system() = 0;
-
-  /**
-   * Add one variable to the ImplicitSystem (i.e. this system) that is
-   * used to perform L2 project solves.
-   */
-  virtual void init_implicit_system() = 0;
-
-  /**
-   * Evaluate the mesh function at the specified point and for the specified variable.
-   */
-  Number evaluate_mesh_function(unsigned int var_number,
-                                Point p);
-
-  /**
-   * Set a point locator tolerance to be used in this class's MeshFunction, and
-   * other operations that require a PointLocator.
-   */
-  void set_point_locator_tol(Real point_locator_tol);
-
-  /**
-   * \returns The point locator tolerance.
-   */
-  Real get_point_locator_tol() const;
-
-  /**
    * Build a vector of ElemAssembly objects that accesses the basis
    * functions stored in this RBEIMConstruction object. This is useful
    * for performing the Offline stage of the Reduced Basis method where
@@ -181,53 +135,6 @@ public:
    * ElemAssembly object.
    */
   virtual std::unique_ptr<ElemAssembly> build_eim_assembly(unsigned int bf_index) = 0;
-
-  /**
-   * Get the ExplicitSystem associated with this system.
-   */
-  ExplicitSystem & get_explicit_system();
-
-  /**
-   * Load the i^th RB function into the RBConstruction
-   * solution vector.
-   * Override to load the basis function into the ExplicitSystem.
-   */
-  virtual void load_basis_function(unsigned int i) override;
-
-  /**
-   * Load the RB solution from the most recent solve with rb_eval
-   * into this system's solution vector.
-   * Override to load the solution into the ExplicitSystem.
-   */
-  virtual void load_rb_solution() override;
-
-  /**
-   * Load \p source into the subvector of \p dest corresponding
-   * to var \p var.
-   */
-  void set_explicit_sys_subvector(NumericVector<Number>& dest,
-                                  unsigned int var,
-                                  NumericVector<Number>& source);
-
-  /**
-   * Load the subvector of \p localized_source corresponding to variable \p var into
-   * \p dest. We require localized_source to be localized before we call this method.
-   */
-  void get_explicit_sys_subvector(NumericVector<Number>& dest,
-                                  unsigned int var,
-                                  NumericVector<Number>& localized_source);
-
-  /**
-   * Set up the index map between the implicit and explicit systems.
-   */
-  void init_dof_map_between_systems();
-
-  /**
-   * Plot all the parameterized functions that we are storing
-   * in _parametrized_functions_in_training_set. \p pathname
-   * provides the path to where the plot data will be saved.
-   */
-  void plot_parametrized_functions_in_training_set(const std::string & pathname);
 
   /**
    * @return true if the most recent truth solve gave a zero solution.
@@ -250,34 +157,20 @@ public:
 protected:
 
   /**
-   * Override to initialize the coupling matrix to decouple variables in this system.
+   * Add a new basis function to the EIM approximation.
    */
-  virtual void init_data() override;
+  virtual void enrich_eim_approximation();
 
   /**
-   * Add a new basis function to the RB space. Override
-   * to enrich with the EIM basis functions.
+   * Update the matrices used in training the EIM approximation.
    */
-  virtual void enrich_RB_space() override;
-
-  /**
-   * Update the system after enriching the RB space; this calls
-   * a series of functions to update the system properly.
-   */
-  virtual void update_system() override;
-
-  /**
-   * Compute the reduced basis matrices for the current basis.
-   * Override to update the inner product matrix that
-   * is used to compute the best fit to parametrized_function.
-   */
-  virtual void update_RB_system_matrices() override;
+  virtual void update_eim_matrices();
 
   /**
    * Override to return the best fit error. This function is used in
    * the Greedy algorithm to select the next parameter.
    */
-  virtual Real get_RB_error_bound() override;
+  virtual Real get_eim_error_bound();
 
   /**
    * Pre-request FE data needed for calculations.
@@ -305,47 +198,10 @@ protected:
 private:
 
   /**
-   * A mesh function to interpolate on the mesh.
-   */
-  std::unique_ptr<MeshFunction> _mesh_function;
-
-  /**
-   * We also need an extra vector in which we can store a ghosted
-   * copy of the vector that we wish to use MeshFunction on.
-   */
-  std::unique_ptr<NumericVector<Number>> _ghosted_meshfunction_vector;
-
-  /**
-   * We initialize RBEIMConstruction so that it has an "empty" RBAssemblyExpansion,
-   * because this isn't used at all in the EIM.
-   */
-  RBAssemblyExpansion _empty_rb_assembly_expansion;
-
-  /**
    * The vector of assembly objects that are created to point to
    * this RBEIMConstruction.
    */
   std::vector<std::unique_ptr<ElemAssembly>> _rb_eim_assembly_objects;
-
-  /**
-   * We use an ExplicitSystem to store the EIM basis functions.
-   * This is because if we have an EIM system with many variables
-   * we need to allocate a large matrix. Better to avoid this
-   * and use an ExplicitSystem instead, and only use the ImplicitSystem
-   * to deal with the per-variable L2 projections.
-   */
-  std::string _explicit_system_name;
-
-  /**
-   * The index map between the explicit system and the implicit system.
-   */
-  std::vector<std::vector<dof_id_type>> _dof_map_between_systems;
-
-  /**
-   * This vector is used to store inner_product_matrix * basis_function[i] for each i,
-   * since we frequently use this data.
-   */
-  std::vector<std::unique_ptr<NumericVector<Number>>> _matrix_times_bfs;
 
   /**
    * The point locator tolerance.

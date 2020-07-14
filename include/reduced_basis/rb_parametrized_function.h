@@ -20,8 +20,6 @@
 #ifndef LIBMESH_RB_PARAMETRIZED_FUNCTION_H
 #define LIBMESH_RB_PARAMETRIZED_FUNCTION_H
 
-
-
 #include "libmesh/libmesh_common.h"
 
 
@@ -30,7 +28,6 @@ namespace libMesh
 
 class RBParameters;
 class Point;
-class Elem;
 
 /**
  * A simple functor class that provides a RBParameter-dependent function.
@@ -55,7 +52,7 @@ public:
    */
   virtual Number evaluate(const RBParameters &,
                           const Point &,
-                          const Elem &) { return 0.; }
+                          subdomain_id_type ) { return 0.; }
 };
 
 }
