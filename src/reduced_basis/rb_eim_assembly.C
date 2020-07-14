@@ -43,13 +43,11 @@ RBEIMAssembly::~RBEIMAssembly()
 {
 }
 
-std::vector<Number> RBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
-                                                           unsigned int var)
+void RBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
+                                            unsigned int var,
+                                            std::vector<Number> & values)
 {
-  LOG_SCOPE("evaluate_basis_function", "RBEIMAssembly");
-
-  return get_rb_eim_evaluation().
-           get_eim_basis_function_values_at_qps(_basis_function_index, elem_id, var);
+  get_rb_eim_evaluation().get_eim_basis_function_values_at_qps(_basis_function_index, elem_id, var, values);
 }
 
 RBEIMEvaluation & RBEIMAssembly::get_rb_eim_evaluation()

@@ -129,12 +129,16 @@ public:
   virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
 
   /**
-   * Return the value of the basis function for the specified variable and point.
+   * Fill up \p values with the basis function values for basis function
+   * \p basis_function_index and variable \p var, at all quadrature points
+   * on element \p elem_id. Each processor stores data for only the
+   * elements local to that processor, so if elem_id is not on this processor
+   * then \p values will be empty.
    */
-  Number get_eim_basis_function_value(unsigned int basis_function_index,
-                                      dof_id_type elem_id,
-                                      unsigned int qp,
-                                      unsigned int var) const;
+  void get_eim_basis_function_values_at_qps(unsigned int basis_function_index,
+                                            dof_id_type elem_id,
+                                            unsigned int var,
+                                            std::vector<Number> & values) const;
 
   /**
    * Return a const reference to the EIM solution coefficients from the most
@@ -195,7 +199,7 @@ private:
    * The EIM basis functions. We store values at quadrature points
    * on elements that are local to this processor. The indexing
    * is as follows:
-   *   basis function index --> element ID --> quadrature point --> variable --> value
+   *   basis function index --> element ID --> variable --> quadrature point --> value
    * We use a map to index the element ID, since the IDs on this processor in
    * generally will not start at zero.
    */

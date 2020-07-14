@@ -176,11 +176,15 @@ std::unique_ptr<RBTheta> RBEIMEvaluation::build_eim_theta(unsigned int index)
   return libmesh_make_unique<RBEIMTheta>(*this, index);
 }
 
-Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function_index,
-                                                     dof_id_type elem_id,
-                                                     unsigned int qp,
-                                                     unsigned int var) const
+void RBEIMEvaluation::get_eim_basis_function_value_at_qps(unsigned int basis_function_index,
+                                                          dof_id_type elem_id,
+                                                          unsigned int var,
+                                                          std::vector<Number> & values) const
 {
+  LOG_SCOPE("get_eim_basis_function_value_at_qps", "RBEIMEvaluation");
+
+  values.clear();
+
   if(basis_function_index >= _local_eim_basis_functions.size())
   {
     libmesh_error_msg("Invalid basis function index: " + std::to_string(basis_function_index));
@@ -189,24 +193,16 @@ Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function
   const auto & eim_basis_function_map = _local_eim_basis_functions[basis_function_index];
 
   const auto it = eim_basis_function_map.find(elem_id);
-  if(it == eim_basis_function_map.end())
+  if(it != eim_basis_function_map.end())
   {
-    libmesh_error_msg("Element ID not found: " + std::to_string(elem_id));
-  }
+    const auto & vars_and_qps_on_elem = it->second;
+    if(var >= vars_and_qps_on_elem.size())
+    {
+      libmesh_error_msg("Invalid var index: " + std::to_string(var));
+    }
 
-  const auto & qps_and_vars_on_elem = it->second;
-  if(qp >= qps_and_vars_on_elem.size())
-  {
-    libmesh_error_msg("Invalid quadrature point index: " + std::to_string(qp));
+    values = vars_and_qps_on_elem[var];
   }
-
-  const auto & vars_on_elem = qps_and_vars_on_elem[qp];
-  if(var >= vars_on_elem.size())
-  {
-    libmesh_error_msg("Invalid var index: " + std::to_string(var));
-  }
-
-  return vars_on_elem[var];
 }
 
 }

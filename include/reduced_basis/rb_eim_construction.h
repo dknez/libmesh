@@ -180,7 +180,7 @@ private:
    *
    * We store values at quadrature points on elements that are local to this processor.
    * The indexing is as follows:
-   *   basis function index --> element ID --> quadrature point --> variable --> value
+   *   basis function index --> element ID --> variable --> quadrature point --> value
    * We use a map to index the element ID, since the IDs on this processor in
    * generally will not start at zero.
    */
