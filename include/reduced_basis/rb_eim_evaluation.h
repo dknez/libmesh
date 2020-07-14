@@ -194,8 +194,8 @@ private:
   /**
    * The EIM basis functions. We store values at quadrature points
    * on elements that are local to this processor. The indexing
-   * is as following:
-   * basis function index --> element ID --> quadrature point --> variable --> value
+   * is as follows:
+   *   basis function index --> element ID --> quadrature point --> variable --> value
    * We use a map to index the element ID, since the IDs on this processor in
    * generally will not start at zero.
    */

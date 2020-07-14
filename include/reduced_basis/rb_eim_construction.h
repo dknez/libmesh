@@ -39,13 +39,12 @@ namespace libMesh
  *
  * RBEIMConstruction implements the Construction stage of the
  * Empirical Interpolation Method (EIM). This can be used to
- * generate an affine approximation to non-affine
- * operators.
- *
- * \author David J. Knezevic
- * \date 2010
+ * create an approximation to parametrized functions. In the context
+ * of the reduced basis (RB) method, the EIM approximation is typically
+ * used to create an affine approximation to non-affine operators,
+ * so that the standard RB method can be applied in that case.
  */
-class RBEIMConstruction : public System
+class RBEIMConstruction : public RBConstructionBase
 {
 public:
 
@@ -70,6 +69,12 @@ public:
   virtual void clear() override;
 
   /**
+   * Perform initialization of this object to prepare for running
+   * train_eim_approximation().
+   */
+  void initalize_eim_construction();
+
+  /**
    * Read parameters in from file and set up this system
    * accordingly.
    */
@@ -89,17 +94,7 @@ public:
   /**
    * Generate the EIM approximation for the specified parametrized function.
    */
-  virtual Real train_eim_approximation();
-
-  /**
-   * Load the truth representation of the parametrized function
-   * at the current parameters into the solution vector.
-   * The truth representation is the projection of
-   * parametrized_function into the finite element space.
-   * If \p plot_solution > 0 the solution will be plotted
-   * to an output file.
-   */
-  virtual Real truth_solve(int plot_solution) override;
+  Real train_eim_approximation();
 
   /**
    * We compute the best fit of parametrized_function
@@ -108,12 +103,7 @@ public:
    *
    * \returns The error in the best fit
    */
-  virtual Real compute_best_fit_error();
-
-  /**
-   * Initialize \p c based on \p sys.
-   */
-  virtual void init_context_with_sys(FEMContext & c, System & sys);
+  Real compute_best_fit_error();
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis
@@ -137,24 +127,35 @@ public:
   virtual std::unique_ptr<ElemAssembly> build_eim_assembly(unsigned int bf_index) = 0;
 
   /**
-   * @return true if the most recent truth solve gave a zero solution.
+   * Pre-request FE data needed for calculations.
    */
-  bool check_if_zero_truth_solve() override;
-
-  //----------- PUBLIC DATA MEMBERS -----------//
+  virtual void init_context(FEMContext &) override;
 
   /**
    * Enum that indicates which type of "best fit" algorithm
    * we should use.
    * a) projection: Find the best fit in the inner product
    * b) eim: Use empirical interpolation to find a "best fit"
-   *
-   * \returns The error associated with the "best fit" in the
-   * norm induced by inner_product_matrix.
    */
   BEST_FIT_TYPE best_fit_type_flag;
 
-protected:
+private:
+
+  /**
+   * Compute and store the parametrized function for each
+   * parameter in the training set. Then in 
+   */
+  void initialize_parametrized_functions_in_training_set();
+
+  /**
+   * Evaluate the parametrized function at the current parameter values
+   * at the quadrature points and store the result in
+   * _local_parametrized_functions_for_training.
+   * If \p init_quad_point_data, we also store the quadrature point data
+   * for the entire mesh in 
+   */
+  void evaluate_parametrized_function_at_all_qps(unsigned int training_index,
+                                                 bool init_quad_point_data);
 
   /**
    * Add a new basis function to the EIM approximation.
@@ -167,46 +168,38 @@ protected:
   virtual void update_eim_matrices();
 
   /**
-   * Override to return the best fit error. This function is used in
-   * the Greedy algorithm to select the next parameter.
-   */
-  virtual Real get_eim_error_bound();
-
-  /**
-   * Pre-request FE data needed for calculations.
-   */
-  virtual void init_context(FEMContext &) override;
-
-  /**
-   * Loop over the training set and compute the parametrized function for each
-   * training index.
-   */
-  void initialize_parametrized_functions_in_training_set();
-
-  /**
-   * Boolean flag to indicate whether or not we have called
-   * compute_parametrized_functions_in_training_set() yet.
-   */
-  bool _parametrized_functions_in_training_set_initialized;
-
-  /**
-   * The libMesh vectors storing the finite element coefficients
-   * of the RB basis functions.
-   */
-  std::vector<std::unique_ptr<NumericVector<Number>>> _parametrized_functions_in_training_set;
-
-private:
-
-  /**
    * The vector of assembly objects that are created to point to
    * this RBEIMConstruction.
    */
   std::vector<std::unique_ptr<ElemAssembly>> _rb_eim_assembly_objects;
 
   /**
-   * The point locator tolerance.
+   * The parametrized functions that are used for training. We pre-compute and
+   * store all of these functions, rather than recompute them at each iteration
+   * of the training.
+   *
+   * We store values at quadrature points on elements that are local to this processor.
+   * The indexing is as follows:
+   *   basis function index --> element ID --> quadrature point --> variable --> value
+   * We use a map to index the element ID, since the IDs on this processor in
+   * generally will not start at zero.
    */
-  Real _point_locator_tol;
+  std::vector<std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> >
+    _local_parametrized_functions_for_training;
+
+  /**
+   * The quadrature point locations, and quadrature point weights on every element
+   * local to this processor.
+   *
+   * The indexing is as follows:
+   *   element ID --> quadrature point --> xyz
+   *   element ID --> quadrature point --> weight
+   * We use a map to index the element ID, since the IDs on this processor in
+   * generally will not start at zero.
+   */
+  std::unordered_map<dof_id_type, std::vector<Point>> > _local_quad_point_locations;
+  std::unordered_map<dof_id_type, std::vector<Point>> > _local_quad_point_weights;
+
 };
 
 } // namespace libMesh

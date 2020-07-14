@@ -53,7 +53,7 @@ namespace libMesh
 RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
                                       const std::string & name_in,
                                       const unsigned int number_in)
-  : System(es, name_in, number_in),
+  : RBConstructionBase(es, name_in, number_in),
     best_fit_type_flag(PROJECTION_BEST_FIT),
     _parametrized_functions_in_training_set_initialized(false)
 {
@@ -61,7 +61,6 @@ RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
 
 RBEIMConstruction::~RBEIMConstruction ()
 {
-  this->clear();
 }
 
 void RBEIMConstruction::clear()
@@ -72,8 +71,13 @@ void RBEIMConstruction::clear()
   _rb_eim_assembly_objects.clear();
 
   // clear the parametrized functions from the training set
-  _parametrized_functions_in_training_set.clear();
-  _parametrized_functions_in_training_set_initialized = false;
+  _local_parametrized_functions_for_training.clear();
+}
+
+void RBEIMConstruction::initalize_eim_construction()
+{
+  initialize_quad_point_data();
+  initialize_parametrized_functions_in_training_set();
 }
 
 void RBEIMConstruction::process_parameters_file (const std::string & parameters_filename)
@@ -103,7 +107,7 @@ void RBEIMConstruction::set_best_fit_type_flag (const std::string & best_fit_typ
 
 void RBEIMConstruction::print_info()
 {
-  System::print_info();
+  RBConstructionBase::print_info();
 
   // Print out setup info
   libMesh::out << std::endl << "RBEIMConstruction parameters:" << std::endl;
@@ -122,7 +126,7 @@ void RBEIMConstruction::print_info()
 void RBEIMConstruction::initialize_rb_construction(bool skip_matrix_assembly,
                                                    bool skip_vector_assembly)
 {
-  Parent::initialize_rb_construction(skip_matrix_assembly, skip_vector_assembly);
+  RBConstructionBase::initialize_rb_construction(skip_matrix_assembly, skip_vector_assembly);
 
   // initialize a serial vector that we will use for MeshFunction evaluations
   _ghosted_meshfunction_vector = NumericVector<Number>::build(this->comm());
@@ -148,69 +152,8 @@ void RBEIMConstruction::initialize_rb_construction(bool skip_matrix_assembly,
   init_dof_map_between_systems();
 }
 
-Real RBEIMConstruction::train_reduced_basis(const bool resize_rb_eval_data)
+Real RBEIMConstruction::train_eim_approximation()
 {
-  // precompute all the parametrized functions that we'll use in the greedy
-  initialize_parametrized_functions_in_training_set();
-
-  return Parent::train_reduced_basis(resize_rb_eval_data);
-}
-
-Number RBEIMConstruction::evaluate_mesh_function(unsigned int var_number,
-                                                 Point p)
-{
-  // Set default values to be an empty vector so that we can use it
-  // below
-  // to check if this processor returned valid data.
-  DenseVector<Number> default_values;
-  _mesh_function->enable_out_of_mesh_mode(default_values);
-
-  _mesh_function->set_point_locator_tolerance( get_point_locator_tol() );
-
-  DenseVector<Number> values;
-  (*_mesh_function)(p,
-                    /*time*/ 0.,
-                    values);
-
-  // We evaluated the mesh function, but it will only return a valid set of values on one processor
-  // (values will be empty on all other processors) so we need to broadcast those valid values
-  // to all processors.
-  Number value = 0;
-  unsigned int root_id=0;
-  unsigned int check_for_valid_value = 0;
-  if (values.size() != 0)
-    {
-      root_id = this->processor_id();
-      value = values(var_number);
-      check_for_valid_value = 1;
-    }
-
-  // If this sum is zero, then we didn't enter the if block above on any processor. In that
-  // case we should throw an error.
-  this->comm().sum(check_for_valid_value);
-  if (check_for_valid_value == 0)
-    {
-      libmesh_error_msg("MeshFunction evaluation failed on all processors");
-    }
-
-  // root_id may be non-zero on more than one processor due to ghost elements
-  // so use this->comm().max to get just one proc id
-  this->comm().max(root_id);
-
-  // Then broadcast the result
-  this->comm().broadcast(value, root_id);
-
-  return value;
-}
-
-void RBEIMConstruction::set_point_locator_tol(Real point_locator_tol)
-{
-  _point_locator_tol = point_locator_tol;
-}
-
-Real RBEIMConstruction::get_point_locator_tol() const
-{
-  return _point_locator_tol;
 }
 
 void RBEIMConstruction::initialize_eim_assembly_objects()
@@ -220,49 +163,94 @@ void RBEIMConstruction::initialize_eim_assembly_objects()
     _rb_eim_assembly_objects.push_back(build_eim_assembly(i));
 }
 
-ExplicitSystem & RBEIMConstruction::get_explicit_system()
-{
-  return get_equation_systems().get_system<ExplicitSystem>(_explicit_system_name);
-}
-
-void RBEIMConstruction::load_basis_function(unsigned int i)
-{
-  LOG_SCOPE("load_basis_function()", "RBEIMConstruction");
-
-  libmesh_assert_less (i, get_rb_evaluation().get_n_basis_functions());
-
-  *get_explicit_system().solution = get_rb_evaluation().get_basis_function(i);
-
-  get_explicit_system().update();
-}
-
-void RBEIMConstruction::load_rb_solution()
-{
-  LOG_SCOPE("load_rb_solution()", "RBEIMConstruction");
-
-  solution->zero();
-
-  if (get_rb_evaluation().RB_solution.size() > get_rb_evaluation().get_n_basis_functions())
-    libmesh_error_msg("ERROR: System contains " << get_rb_evaluation().get_n_basis_functions() << " basis functions." \
-                      << " RB_solution vector constains " << get_rb_evaluation().RB_solution.size() << " entries." \
-                      << " RB_solution in RBConstruction::load_rb_solution is too long!");
-
-  RBEvaluation & rbe = get_rb_evaluation();
-  for (auto i : make_range(rbe.RB_solution.size()))
-    get_explicit_system().solution->add(rbe.RB_solution(i),
-                                        rbe.get_basis_function(i));
-
-  get_explicit_system().update();
-}
-
 std::vector<std::unique_ptr<ElemAssembly>> & RBEIMConstruction::get_eim_assembly_objects()
 {
   return _rb_eim_assembly_objects;
 }
 
-void RBEIMConstruction::enrich_RB_space()
+Real RBEIMConstruction::compute_best_fit_error()
 {
-  LOG_SCOPE("enrich_RB_space()", "RBEIMConstruction");
+  LOG_SCOPE("compute_best_fit_error()", "RBEIMConstruction");
+
+  const unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
+
+  // load up the parametrized function for the current parameters
+  truth_solve(-1);
+
+  switch(best_fit_type_flag)
+    {
+      // Perform an L2 projection in order to find an approximation to solution (from truth_solve above)
+    case(PROJECTION_BEST_FIT):
+      {
+        // We have pre-stored inner_product_matrix * basis_function[i] for each i
+        // so we can just evaluate the dot product here.
+        DenseVector<Number> best_fit_rhs(RB_size);
+        for (unsigned int i=0; i<RB_size; i++)
+          {
+            best_fit_rhs(i) = get_explicit_system().solution->dot(*_matrix_times_bfs[i]);
+          }
+
+        // Now compute the best fit by an LU solve
+        get_rb_evaluation().RB_solution.resize(RB_size);
+        DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
+        get_rb_evaluation().RB_inner_product_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
+
+        RB_inner_product_matrix_N.lu_solve(best_fit_rhs, get_rb_evaluation().RB_solution);
+        break;
+      }
+      // Perform EIM solve in order to find the approximation to solution
+      // (rb_solve provides the EIM basis function coefficients used below)
+    case(EIM_BEST_FIT):
+      {
+        // Turn off error estimation for this rb_solve, we use the linfty norm instead
+        get_rb_evaluation().evaluate_RB_error_bound = false;
+        get_rb_evaluation().set_parameters( get_parameters() );
+        get_rb_evaluation().rb_solve(RB_size);
+        get_rb_evaluation().evaluate_RB_error_bound = true;
+        break;
+      }
+    default:
+      libmesh_error_msg("Should not reach here");
+    }
+
+  // load the error into solution
+  for (unsigned int i=0; i<get_rb_evaluation().get_n_basis_functions(); i++)
+    get_explicit_system().solution->add(-get_rb_evaluation().RB_solution(i),
+                                        get_rb_evaluation().get_basis_function(i));
+
+  Real best_fit_error = get_explicit_system().solution->linfty_norm();
+
+  return best_fit_error;
+}
+
+void RBEIMConstruction::init_context(FEMContext & c)
+{
+  // Pre-request FE data for all element dimensions present in the
+  // mesh.  Note: we currently pre-request FE data for all variables
+  // in the current system but in some cases that may be overkill, for
+  // example if only variable 0 is used.
+  const System & sys = c.get_system();
+  const MeshBase & mesh = sys.get_mesh();
+
+  for (unsigned int dim=1; dim<=3; ++dim)
+    if (mesh.elem_dimensions().count(dim))
+      for (unsigned int var=0; var<sys.n_vars(); ++var)
+      {
+        auto fe = c.get_element_fe(var, dim);
+        fe->get_JxW();
+        fe->get_phi();
+        fe->get_xyz();
+
+        auto side_fe = c.get_side_fe(var, dim);
+        side_fe->get_JxW();
+        side_fe->get_phi();
+        side_fe->get_xyz();
+      }
+}
+
+void RBEIMConstruction::enrich_eim_approximation()
+{
+  LOG_SCOPE("enrich_eim_approximation()", "RBEIMConstruction");
 
   // put solution in _ghosted_meshfunction_vector so we can access it from the mesh function
   // this allows us to compute EIM_rhs appropriately
@@ -420,6 +408,8 @@ void RBEIMConstruction::enrich_RB_space()
 
 void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
 {
+  LOG_SCOPE("initialize_parametrized_functions_in_training_set()", "RBEIMConstruction");
+
   if (!serial_training_set)
     libmesh_error_msg("Error: We must have serial_training_set==true in " \
                       << "RBEIMConstruction::initialize_parametrized_functions_in_training_set");
@@ -428,13 +418,11 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   // initialize rb_eval's parameters
   get_rb_evaluation().initialize_parameters(*this);
 
-  _parametrized_functions_in_training_set.resize( get_n_training_samples() );
+  _local_parametrized_functions_for_training.resize( get_n_training_samples() );
   for (unsigned int i=0; i<get_n_training_samples(); i++)
     {
       set_params_from_training_set(i);
-      truth_solve(-1);
-
-      _parametrized_functions_in_training_set[i] = get_explicit_system().solution->clone();
+      evaluate_parametrized_function_at_all_qps(i);
 
       libMesh::out << "Completed solve for training sample " << (i+1) << " of " << get_n_training_samples() << std::endl;
     }
@@ -444,261 +432,120 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   libMesh::out << "Parametrized functions in training set initialized" << std::endl << std::endl;
 }
 
-void RBEIMConstruction::plot_parametrized_functions_in_training_set(const std::string & pathname)
+Real RBEIMConstruction::evaluate_parametrized_function_at_all_qps(unsigned int training_index)
 {
-  // Ignore unused parameter warnings when Exodus is not available.
-  libmesh_ignore(pathname);
+  LOG_SCOPE("evaluate_parametrized_function_at_all_qps()", "RBEIMConstruction");
 
-  libmesh_assert(_parametrized_functions_in_training_set_initialized);
-
-  for (auto i : index_range(_parametrized_functions_in_training_set))
+  if (this->n_vars() != 1)
     {
-#ifdef LIBMESH_HAVE_EXODUS_API
-      *get_explicit_system().solution = *_parametrized_functions_in_training_set[i];
-
-      std::stringstream pathname_i;
-      pathname_i << pathname << "_" << i << ".exo";
-
-      std::set<std::string> system_names;
-      system_names.insert(get_explicit_system().name());
-      ExodusII_IO(get_mesh()).write_equation_systems (pathname_i.str(),
-                                                      this->get_equation_systems(),
-                                                      &system_names);
-      libMesh::out << "Plotted parameterized function " << i << std::endl;
-#endif
-    }
-}
-
-bool RBEIMConstruction::check_if_zero_truth_solve()
-{
-  return (get_explicit_system().solution->l2_norm() == 0.);
-}
-
-Real RBEIMConstruction::compute_best_fit_error()
-{
-  LOG_SCOPE("compute_best_fit_error()", "RBEIMConstruction");
-
-  const unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
-
-  // load up the parametrized function for the current parameters
-  truth_solve(-1);
-
-  switch(best_fit_type_flag)
-    {
-      // Perform an L2 projection in order to find an approximation to solution (from truth_solve above)
-    case(PROJECTION_BEST_FIT):
-      {
-        // We have pre-stored inner_product_matrix * basis_function[i] for each i
-        // so we can just evaluate the dot product here.
-        DenseVector<Number> best_fit_rhs(RB_size);
-        for (unsigned int i=0; i<RB_size; i++)
-          {
-            best_fit_rhs(i) = get_explicit_system().solution->dot(*_matrix_times_bfs[i]);
-          }
-
-        // Now compute the best fit by an LU solve
-        get_rb_evaluation().RB_solution.resize(RB_size);
-        DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
-        get_rb_evaluation().RB_inner_product_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
-
-        RB_inner_product_matrix_N.lu_solve(best_fit_rhs, get_rb_evaluation().RB_solution);
-        break;
-      }
-      // Perform EIM solve in order to find the approximation to solution
-      // (rb_solve provides the EIM basis function coefficients used below)
-    case(EIM_BEST_FIT):
-      {
-        // Turn off error estimation for this rb_solve, we use the linfty norm instead
-        get_rb_evaluation().evaluate_RB_error_bound = false;
-        get_rb_evaluation().set_parameters( get_parameters() );
-        get_rb_evaluation().rb_solve(RB_size);
-        get_rb_evaluation().evaluate_RB_error_bound = true;
-        break;
-      }
-    default:
-      libmesh_error_msg("Should not reach here");
+      libmesh_error_msg("The system that we use to perform EIM L2 solves should have one variable");
     }
 
-  // load the error into solution
-  for (unsigned int i=0; i<get_rb_evaluation().get_n_basis_functions(); i++)
-    get_explicit_system().solution->add(-get_rb_evaluation().RB_solution(i),
-                                        get_rb_evaluation().get_basis_function(i));
+  RBEIMEvaluation & eim_eval = cast_ref<RBEIMEvaluation &>(get_rb_evaluation());
+  eim_eval.set_parameters( get_parameters() );
 
-  Real best_fit_error = get_explicit_system().solution->linfty_norm();
+  // Compute truth representation via L2 projection
+  const MeshBase & mesh = this->get_mesh();
 
-  return best_fit_error;
-}
+  std::unique_ptr<DGFEMContext> c = libmesh_make_unique<DGFEMContext>(*this);
+  DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
 
-Real RBEIMConstruction::truth_solve(int plot_solution)
-{
-  LOG_SCOPE("truth_solve()", "RBEIMConstruction");
+  // Pre-request required data
+  init_context_with_sys(context, *this);
 
-  int training_parameters_found_index = -1;
-  if (_parametrized_functions_in_training_set_initialized)
+  // Get local references to context data (will be updated each
+  // time elem_fe_reinit() is called).
+  FEBase * elem_fe = nullptr;
+  context.get_element_fe( 0, elem_fe );
+  const std::vector<Real> & JxW = elem_fe->get_JxW();
+  const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
+  const std::vector<Point> & xyz = elem_fe->get_xyz();
+
+  // First cache all the element data
+  std::vector<std::vector<std::vector<Number>>> parametrized_fn_vals(mesh.n_elem());
+  std::vector<std::vector<Real>> JxW_values(mesh.n_elem());
+  std::vector<std::vector<std::vector<Real>>> phi_values(mesh.n_elem());
+
+  for (const auto & elem : mesh.active_local_element_ptr_range())
     {
-      // Check if parameters are in the training set. If so, we can just load the
-      // solution from _parametrized_functions_in_training_set
+      dof_id_type elem_id = elem->id();
 
-      for (unsigned int i=0; i<get_n_training_samples(); i++)
+      // Recompute values for current Elem
+      context.pre_fe_reinit(*this, elem);
+      context.elem_fe_reinit();
+
+      // Loop over qp before var because parametrized functions often use
+      // some caching based on qp.
+      unsigned int n_qpoints = context.get_element_qrule().n_points();
+      parametrized_fn_vals[elem_id].resize(n_qpoints);
+      JxW_values[elem_id].resize(n_qpoints);
+      phi_values[elem_id].resize(n_qpoints);
+      for (unsigned int qp=0; qp<n_qpoints; qp++)
         {
-          if (get_parameters() == get_params_from_training_set(i))
+          JxW_values[elem_id][qp] = JxW[qp];
+
+          unsigned int n_var_dofs = cast_int<unsigned int>(context.get_dof_indices().size());
+          phi_values[elem_id][qp].resize(n_var_dofs);
+          for (unsigned int i=0; i != n_var_dofs; i++)
             {
-              training_parameters_found_index = i;
-              break;
+              phi_values[elem_id][qp][i] = phi[i][qp];
+            }
+
+          parametrized_fn_vals[elem_id][qp].resize(get_explicit_system().n_vars());
+          for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
+            {
+              Number eval_result = eim_eval.evaluate_parametrized_function(var, xyz[qp], *elem);
+              parametrized_fn_vals[elem_id][qp][var] = eval_result;
             }
         }
     }
 
-  // If the parameters are in the training set, just copy the solution vector
-  if (training_parameters_found_index >= 0)
+  // We do a distinct solve for each variable in the ExplicitSystem
+  for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
     {
-      *get_explicit_system().solution =
-        *_parametrized_functions_in_training_set[training_parameters_found_index];
-      get_explicit_system().update(); // put the solution into current_local_solution as well
-    }
-  // Otherwise, we have to compute the projection
-  else
-    {
-      if (this->n_vars() != 1)
-        {
-          libmesh_error_msg("The system that we use to perform EIM L2 solves should have one variable");
-        }
-
-      RBEIMEvaluation & eim_eval = cast_ref<RBEIMEvaluation &>(get_rb_evaluation());
-      eim_eval.set_parameters( get_parameters() );
-
-      // Compute truth representation via L2 projection
-      const MeshBase & mesh = this->get_mesh();
-
-      std::unique_ptr<DGFEMContext> c = libmesh_make_unique<DGFEMContext>(*this);
-      DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
-
-      // Pre-request required data
-      init_context_with_sys(context, *this);
-
-      // Get local references to context data (will be updated each
-      // time elem_fe_reinit() is called).
-      FEBase * elem_fe = nullptr;
-      context.get_element_fe( 0, elem_fe );
-      const std::vector<Real> & JxW = elem_fe->get_JxW();
-      const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
-      const std::vector<Point> & xyz = elem_fe->get_xyz();
-
-      // First cache all the element data
-      std::vector<std::vector<std::vector<Number>>> parametrized_fn_vals(mesh.n_elem());
-      std::vector<std::vector<Real>> JxW_values(mesh.n_elem());
-      std::vector<std::vector<std::vector<Real>>> phi_values(mesh.n_elem());
+      rhs->zero();
 
       for (const auto & elem : mesh.active_local_element_ptr_range())
         {
           dof_id_type elem_id = elem->id();
 
-          // Recompute values for current Elem
           context.pre_fe_reinit(*this, elem);
-          context.elem_fe_reinit();
+          //context.elem_fe_reinit(); <--- skip this because we cached all the FE data
 
           // Loop over qp before var because parametrized functions often use
           // some caching based on qp.
-          unsigned int n_qpoints = context.get_element_qrule().n_points();
-          parametrized_fn_vals[elem_id].resize(n_qpoints);
-          JxW_values[elem_id].resize(n_qpoints);
-          phi_values[elem_id].resize(n_qpoints);
-          for (unsigned int qp=0; qp<n_qpoints; qp++)
+          for (auto qp : index_range(JxW_values[elem_id]))
             {
-              JxW_values[elem_id][qp] = JxW[qp];
+              const unsigned int n_var_dofs =
+                cast_int<unsigned int>(phi_values[elem_id][qp].size());
 
-              unsigned int n_var_dofs = cast_int<unsigned int>(context.get_dof_indices().size());
-              phi_values[elem_id][qp].resize(n_var_dofs);
+              Number eval_result = parametrized_fn_vals[elem_id][qp][var];
               for (unsigned int i=0; i != n_var_dofs; i++)
                 {
-                  phi_values[elem_id][qp][i] = phi[i][qp];
-                }
-
-              parametrized_fn_vals[elem_id][qp].resize(get_explicit_system().n_vars());
-              for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
-                {
-                  Number eval_result = eim_eval.evaluate_parametrized_function(var, xyz[qp], *elem);
-                  parametrized_fn_vals[elem_id][qp][var] = eval_result;
+                  context.get_elem_residual()(i) +=
+                    JxW_values[elem_id][qp] * eval_result * phi_values[elem_id][qp][i];
                 }
             }
+
+          // Apply constraints, e.g. periodic constraints
+          this->get_dof_map().constrain_element_vector(context.get_elem_residual(), context.get_dof_indices() );
+
+          // Add element vector to global vector
+          rhs->add_vector(context.get_elem_residual(), context.get_dof_indices() );
         }
 
-      // We do a distinct solve for each variable in the ExplicitSystem
-      for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
-        {
-          rhs->zero();
+      // Solve to find the best fit, then solution stores the truth representation
+      // of the function to be approximated
+      solve_for_matrix_and_rhs(*inner_product_solver, *inner_product_matrix, *rhs);
 
-          for (const auto & elem : mesh.active_local_element_ptr_range())
-            {
-              dof_id_type elem_id = elem->id();
+      if (assert_convergence)
+        check_convergence(*inner_product_solver);
 
-              context.pre_fe_reinit(*this, elem);
-              //context.elem_fe_reinit(); <--- skip this because we cached all the FE data
-
-              // Loop over qp before var because parametrized functions often use
-              // some caching based on qp.
-              for (auto qp : index_range(JxW_values[elem_id]))
-                {
-                  const unsigned int n_var_dofs =
-                    cast_int<unsigned int>(phi_values[elem_id][qp].size());
-
-                  Number eval_result = parametrized_fn_vals[elem_id][qp][var];
-                  for (unsigned int i=0; i != n_var_dofs; i++)
-                    {
-                      context.get_elem_residual()(i) +=
-                        JxW_values[elem_id][qp] * eval_result * phi_values[elem_id][qp][i];
-                    }
-                }
-
-              // Apply constraints, e.g. periodic constraints
-              this->get_dof_map().constrain_element_vector(context.get_elem_residual(), context.get_dof_indices() );
-
-              // Add element vector to global vector
-              rhs->add_vector(context.get_elem_residual(), context.get_dof_indices() );
-            }
-
-          // Solve to find the best fit, then solution stores the truth representation
-          // of the function to be approximated
-          solve_for_matrix_and_rhs(*inner_product_solver, *inner_product_matrix, *rhs);
-
-          if (assert_convergence)
-            check_convergence(*inner_product_solver);
-
-          // Now copy the solution to the explicit system's solution.
-          set_explicit_sys_subvector(*get_explicit_system().solution, var, *solution);
-        }
-      get_explicit_system().update();
+      // Now copy the solution to the explicit system's solution.
+      set_explicit_sys_subvector(*get_explicit_system().solution, var, *solution);
     }
+  get_explicit_system().update();
 
-  if (plot_solution > 0)
-    {
-#ifdef LIBMESH_HAVE_EXODUS_API
-      ExodusII_IO(get_mesh()).write_equation_systems ("truth.exo",
-                                                      this->get_equation_systems());
-#endif
-    }
-
-  return 0.;
-}
-
-void RBEIMConstruction::init_context_with_sys(FEMContext & c, System & sys)
-{
-  // default implementation of init_context for compute_best_fit. We
-  // pre-request FE data for all element dimensions present in the
-  // mesh.
-  for (int dim=1; dim<=3; ++dim)
-    if (sys.get_mesh().elem_dimensions().count(dim))
-      for (unsigned int var=0; var<sys.n_vars(); var++)
-        {
-          auto elem_fe = c.get_element_fe(var, dim);
-          elem_fe->get_JxW();
-          elem_fe->get_phi();
-          elem_fe->get_xyz();
-
-          // Explicitly request nothing to be computed for sides.
-          auto side_fe = c.get_side_fe(var, dim);
-          side_fe->get_nothing();
-        }
 }
 
 void RBEIMConstruction::update_eim_matrices()
@@ -762,37 +609,6 @@ void RBEIMConstruction::update_eim_matrices()
         evaluate_mesh_function( eim_eval.interpolation_points_var[RB_size-1],
                                 eim_eval.interpolation_points[RB_size-1] );
     }
-}
-
-Real RBEIMConstruction::get_eim_error_bound()
-{
-  Real best_fit_error = compute_best_fit_error();
-  return best_fit_error;
-}
-
-void RBEIMConstruction::init_context(FEMContext & c)
-{
-  // Pre-request FE data for all element dimensions present in the
-  // mesh.  Note: we currently pre-request FE data for all variables
-  // in the current system but in some cases that may be overkill, for
-  // example if only variable 0 is used.
-  const System & sys = c.get_system();
-  const MeshBase & mesh = sys.get_mesh();
-
-  for (unsigned int dim=1; dim<=3; ++dim)
-    if (mesh.elem_dimensions().count(dim))
-      for (unsigned int var=0; var<sys.n_vars(); ++var)
-      {
-        auto fe = c.get_element_fe(var, dim);
-        fe->get_JxW();
-        fe->get_phi();
-        fe->get_xyz();
-
-        auto side_fe = c.get_side_fe(var, dim);
-        side_fe->get_JxW();
-        side_fe->get_phi();
-        side_fe->get_xyz();
-      }
 }
 
 } // namespace libMesh
