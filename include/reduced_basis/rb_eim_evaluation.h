@@ -68,20 +68,16 @@ public:
   void resize_data_structures(const unsigned int Nmax);
 
   /**
-   * Attach the parametrized function that we will approximate
-   * using the Empirical Interpolation Method.
+   * Set the parametrized function that we will approximate
+   * using the Empirical Interpolation Method. This object
+   * will take ownership of the unique pointer.
    */
-  void attach_parametrized_function(RBParametrizedFunction * pf);
+  void set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf);
 
   /**
-   * Evaluate the parametrized function for each entry in \p var_indices, \p qps,
-   * and \p subdomani_ids, and set the corresponding value of the values vector
-   * for each evaluation.
+   * Get a const reference to the parametrized function.
    */
-  void evaluate_parametrized_function(unsigned int var,
-                                      const std::vector<Point> & qps,
-                                      const std::vector<subdomain_id_type> & subdomain_ids,
-                                      std::vector<Number> & values);
+  const RBParametrizedFunction & get_parametrized_function() const;
 
   /**
    * Calculate the EIM approximation to parametrized_function
@@ -89,14 +85,14 @@ public:
    * solution coefficients in the member _eim_solution.
    * \returns The EIM a posteriori error bound.
    */
-  virtual Real eim_solve(unsigned int N);
+  virtual Real rb_eim_solve(unsigned int N);
 
   /**
    * Calculate the EIM approximation for the given
    * right-hand side vector \p EIM_rhs. Store the
    * solution coefficients in the member _eim_solution.
    */
-  void eim_solve(DenseVector<Number> & EIM_rhs);
+  void rb_eim_solve(DenseVector<Number> & EIM_rhs);
 
   /**
    * Build a vector of RBTheta objects that accesses the components
@@ -133,7 +129,13 @@ public:
    * Return a const reference to the EIM solution coefficients from the most
    * recent solve.
    */
-  const DenseVector<Number> & get_eim_solution() const;
+  const DenseVector<Number> & get_rb_eim_solution() const;
+
+  /**
+   * Get a reference to the i^th basis function.
+   */
+  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> &
+    get_basis_function(unsigned int i) const;
 
   /**
    * Boolean to indicate whether we evaluate a posteriori error bounds
@@ -146,7 +148,7 @@ private:
   /**
    * The EIM solution coefficients from the most recent eim_solve().
    */
-  DenseVector<Number> _eim_solution;
+  DenseVector<Number> _rb_eim_solution;
 
   /**
    * Dense matrix that stores the lower triangular
@@ -173,10 +175,12 @@ private:
   std::vector<subdomain_id> _interpolation_points_subdomain_id;
 
   /**
-   * This vector stores the parametrized functions
-   * that will be approximated in this EIM system.
+   * Store the parametrized function that will be approximated
+   * by this EIM system. Note that the parametrized function
+   * may have more than one component, and each component is
+   * approximated by a separate variable in the EIM system.
    */
-  std::vector<RBParametrizedFunction *> _parametrized_functions;
+  std::unique_ptr<RBParametrizedFunction> _parametrized_function;
 
   /**
    * The vector of RBTheta objects that are created to point to

@@ -65,26 +65,22 @@ void RBEIMEvaluation::resize_data_structures(const unsigned int Nmax)
   _interpolation_matrix.resize(Nmax,Nmax);
 }
 
-void RBEIMEvaluation::attach_parametrized_function(RBParametrizedFunction * pf)
+void RBEIMEvaluation::set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf)
 {
-  _parametrized_functions.push_back(pf);
+  _parametrized_function = std::move(pf):
 }
 
-unsigned int RBEIMEvaluation::get_n_parametrized_functions() const
+const RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function() const
 {
-  return cast_int<unsigned int>(_parametrized_functions.size());
+  if(!_parametrized_function)
+    libmesh_error_msg("Parametrized function not initialized yet");
+
+  return *_parametrized_function;
 }
 
-Number RBEIMEvaluation::evaluate_parametrized_function(unsigned int var_index,
-                                                       const Point & p,
-                                                       subdomain_id_type subdomain_id)
+Real RBEIMEvaluation::rb_eim_solve(unsigned int N)
 {
-  return _parametrized_functions[var_index]->evaluate(get_parameters(), p, subdomain_id);
-}
-
-Real RBEIMEvaluation::eim_solve(unsigned int N)
-{
-  LOG_SCOPE("rb_solve()", "RBEIMEvaluation");
+  LOG_SCOPE("rb_eim_solve()", "RBEIMEvaluation");
 
   if (N > get_n_basis_functions())
     libmesh_error_msg("Error: N cannot be larger than the number of basis functions in rb_solve");
@@ -105,7 +101,7 @@ Real RBEIMEvaluation::eim_solve(unsigned int N)
   DenseMatrix<Number> interpolation_matrix_N;
   _interpolation_matrix.get_principal_submatrix(N, interpolation_matrix_N);
 
-  interpolation_matrix_N.lu_solve(EIM_rhs, _eim_solution);
+  interpolation_matrix_N.lu_solve(EIM_rhs, _rb_eim_solution);
 
   // Optionally evaluate an a posteriori error bound. The EIM error estimate
   // recommended in the literature is based on using "next" EIM point, so
@@ -122,7 +118,7 @@ Real RBEIMEvaluation::eim_solve(unsigned int N)
       Number EIM_approx_at_next_x = 0.;
       for (unsigned int j=0; j<N; j++)
         {
-          EIM_approx_at_next_x += _eim_solution(j) * interpolation_matrix(N,j);
+          EIM_approx_at_next_x += _rb_eim_solution(j) * interpolation_matrix(N,j);
         }
 
       Real error_estimate = std::abs(g_at_next_x - EIM_approx_at_next_x);
@@ -138,9 +134,9 @@ Real RBEIMEvaluation::eim_solve(unsigned int N)
 
 }
 
-void RBEIMEvaluation::rb_solve(DenseVector<Number> & EIM_rhs)
+void RBEIMEvaluation::rb_eim_solve(DenseVector<Number> & EIM_rhs)
 {
-  LOG_SCOPE("rb_solve()", "RBEIMEvaluation");
+  LOG_SCOPE("rb_eim_solve()", "RBEIMEvaluation");
 
   if (EIM_rhs.size() > get_n_basis_functions())
     libmesh_error_msg("Error: N cannot be larger than the number of basis functions in rb_solve");
@@ -152,7 +148,7 @@ void RBEIMEvaluation::rb_solve(DenseVector<Number> & EIM_rhs)
   DenseMatrix<Number> interpolation_matrix_N;
   _interpolation_matrix.get_principal_submatrix(N, interpolation_matrix_N);
 
-  interpolation_matrix_N.lu_solve(EIM_rhs, _eim_solution);
+  interpolation_matrix_N.lu_solve(EIM_rhs, _rb_eim_solution);
 }
 
 void RBEIMEvaluation::initialize_eim_theta_objects()
@@ -200,6 +196,17 @@ void RBEIMEvaluation::get_eim_basis_function_value_at_qps(unsigned int basis_fun
 
     values = vars_and_qps_on_elem[var];
   }
+}
+
+const DenseVector<Number> & RBEIMEvaluation::get_rb_eim_solution() const
+{
+  return _rb_eim_solution;
+}
+
+const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> &
+  RBEIMEvaluation::get_basis_function(unsigned int i) const
+{
+  return _local_eim_basis_functions[i];
 }
 
 }

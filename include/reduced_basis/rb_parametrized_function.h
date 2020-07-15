@@ -51,7 +51,7 @@ public:
    * A scalar-valued function has one component, a vector-valued
    * function has more than one component.
    */
-  virtual unsigned int get_n_components() const { return 0; }
+  virtual unsigned int get_n_components() const = 0;
 
   /**
    * Pre-evaluate the parametrized function for the specified RBParameters
@@ -61,7 +61,7 @@ public:
    */
   virtual void preevaluate_parametrized_function(const RBParameters & /*mu*/,
                                                  const std::unordered_map<dof_id_type, std::vector<Point>> > & /*xyz*/,
-                                                 std::unordered_map<dof_id_type, std::vector<Real>> > /*sbd_ids*/) {}
+                                                 std::unordered_map<dof_id_type, std::vector<Real>> > /*sbd_ids*/) = 0;
 
   /**
    * Look up the preevaluate values of the parametrized function for
@@ -69,7 +69,7 @@ public:
    */
   virtual Number evaluate(unsigned int /*comp*/,
                           dof_id_type /*elem_id*/,
-                          unsigned int /*qp*/) { return 0.; }
+                          unsigned int /*qp*/) = 0;
 };
 
 }

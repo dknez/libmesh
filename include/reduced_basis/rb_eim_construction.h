@@ -44,7 +44,7 @@ namespace libMesh
  * used to create an affine approximation to non-affine operators,
  * so that the standard RB method can be applied in that case.
  */
-class RBEIMConstruction : public RBConstructionBase
+class RBEIMConstruction : public RBConstructionBase<LinearImplicitSystem>
 {
 public:
 
@@ -162,6 +162,22 @@ private:
    * so that we can use this in evaluation of the parametrized functions.
    */
   void initialize_qp_data();
+
+  /**
+   * Evaluate the inner product of vec1 and vec2 which specify values at
+   * quadrature points. The inner product includes the JxW contributions
+   * stored in _local_quad_point_JxW, so that this is equivalent to
+   * computing w^t M v, where M is the mass matrix.
+   */
+  Number inner_product(
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & w);
+
+  /**
+   * Get the maximum absolute value from a vector stored in the format that we use
+   * for basis functions.
+   */
+  Real get_max_abs_value(const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v) const;
 
   /**
    * Add a new basis function to the EIM approximation.

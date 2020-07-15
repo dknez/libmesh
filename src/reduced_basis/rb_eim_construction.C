@@ -154,58 +154,58 @@ std::vector<std::unique_ptr<ElemAssembly>> & RBEIMConstruction::get_eim_assembly
   return _rb_eim_assembly_objects;
 }
 
-Real RBEIMConstruction::compute_best_fit_error()
+Real RBEIMConstruction::compute_best_fit_error(unsigned int training_index)
 {
   LOG_SCOPE("compute_best_fit_error()", "RBEIMConstruction");
 
-  const unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
+  // Make a copy of the pre-computed solution for the specified training sample
+  // since we will modify it below to compute the best fit error.
+  std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> solution =
+    _local_parametrized_functions_for_training[training_index];
 
-  // load up the parametrized function for the current parameters
-  truth_solve(-1);
+  const unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
+  DenseVector<Number> best_fit_coeffs;
 
   switch(best_fit_type_flag)
     {
-      // Perform an L2 projection in order to find an approximation to solution (from truth_solve above)
     case(PROJECTION_BEST_FIT):
       {
-        // We have pre-stored inner_product_matrix * basis_function[i] for each i
-        // so we can just evaluate the dot product here.
+        // Perform an L2 projection in order to find the best approximation to
+        // the parametrized function from the current EIM space.
         DenseVector<Number> best_fit_rhs(RB_size);
         for (unsigned int i=0; i<RB_size; i++)
           {
-            best_fit_rhs(i) = get_explicit_system().solution->dot(*_matrix_times_bfs[i]);
+            best_fit_rhs(i) = inner_product(solution, get_rb_eim_evaluation().get_basis_function(i));
           }
 
         // Now compute the best fit by an LU solve
-        get_rb_evaluation().RB_solution.resize(RB_size);
         DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
         _eim_projection_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
 
-        RB_inner_product_matrix_N.lu_solve(best_fit_rhs, get_rb_evaluation().RB_solution);
+        RB_inner_product_matrix_N.lu_solve(best_fit_rhs, best_fit_coeffs);
         break;
       }
-      // Perform EIM solve in order to find the approximation to solution
-      // (rb_solve provides the EIM basis function coefficients used below)
     case(EIM_BEST_FIT):
       {
-        // Turn off error estimation for this rb_solve, we use the linfty norm instead
-        get_rb_evaluation().evaluate_RB_error_bound = false;
-        get_rb_evaluation().set_parameters( get_parameters() );
-        get_rb_evaluation().rb_solve(RB_size);
-        get_rb_evaluation().evaluate_RB_error_bound = true;
+        // Perform EIM solve in order to find the approximation to solution
+        // (rb_eim_solve provides the EIM basis function coefficients used below)
+
+        // Turn off error estimation for this rb_eim_solve, we use the linfty norm instead
+        get_rb_eim_evaluation().evaluate_RB_error_bound = false;
+        get_rb_eim_evaluation().set_parameters( get_parameters() );
+        get_rb_eim_evaluation().rb_eim_solve(RB_size);
+        get_rb_eim_evaluation().evaluate_RB_error_bound = true;
+
+        best_fit_coeffs = get_rb_eim_evaluation().get_rb_eim_solution();
         break;
       }
     default:
       libmesh_error_msg("Should not reach here");
     }
 
-  // load the error into solution
-  for (unsigned int i=0; i<get_rb_evaluation().get_n_basis_functions(); i++)
-    get_explicit_system().solution->add(-get_rb_evaluation().RB_solution(i),
-                                        get_rb_evaluation().get_basis_function(i));
+  get_rb_eim_evaluation().decrement_vector(solution, best_fit_coeffs);
 
-  Real best_fit_error = get_explicit_system().solution->linfty_norm();
-
+  Real best_fit_error = get_max_abs_value(solution);
   return best_fit_error;
 }
 
@@ -246,7 +246,7 @@ void RBEIMConstruction::enrich_eim_approximation()
   RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
   // If we have at least one basis function we need to use
-  // rb_solve to find the EIM interpolation error, otherwise just use solution as is
+  // rb_eim_solve() to find the EIM interpolation error, otherwise just use solution as is
   if (get_rb_evaluation().get_n_basis_functions() > 0)
     {
       // get the right-hand side vector for the EIM approximation
@@ -261,7 +261,7 @@ void RBEIMConstruction::enrich_eim_approximation()
         }
 
       eim_eval.set_parameters( get_parameters() );
-      eim_eval.rb_solve(EIM_rhs);
+      eim_eval.rb_eim_solve(EIM_rhs);
 
       // Load the "EIM residual" into solution by subtracting
       // the EIM approximation
@@ -405,25 +405,34 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   // Store the locations of all quadrature points
   initialize_qp_data();
 
-  get_rb_evaluation().initialize_parameters(*this);
-
   _local_parametrized_functions_for_training.resize( get_n_training_samples() );
   for (unsigned int i=0; i<get_n_training_samples(); i++)
     {
+      libMesh::out << "Initializing parametrized function for training sample "
+        << (i+1) << " of " << get_n_training_samples() << std::endl;
+
       set_params_from_training_set(i);
       eim_eval.get_parametrized_function().preevaluate_parametrized_function(get_parameters(),
                                                                              _local_quad_point_locations,
                                                                              _local_quad_point_subdomain_ids);
 
-      for (unsigned int comp : index_range(eim_eval().get_n_parametrized_functions().get_n_components())
-        for (const auto & [elem_id,xyz_vector] : _local_quad_point_locations)
+      unsigned int n_comps = eim_eval().get_n_parametrized_functions().get_n_components();
+
+      for (const auto & [elem_id,xyz_vector] : _local_quad_point_locations)
+      {
+        std::vector<std::vector<Number>> comps_and_qps(n_comps);
+        for (unsigned int comp : index_range(n_comps))
+        {
+          comps_and_qps[comp].resize(xyz_vector.size());
           for (unsigned int qp : index_range(xyz_vector.size()))
             {
-              _local_parametrized_functions_for_training[training_index][elem_id][var] =
+              comps_and_qps[comp][qp] =
                 eim_eval.evaluate_parametrized_function(comp, elem_id, qp);
             }
+        }
 
-      libMesh::out << "Initialized data for training sample " << (i+1) << " of " << get_n_training_samples() << std::endl;
+        _local_parametrized_functions_for_training[i][elem_id] = comps_and_qps;
+      }
     }
 
   libMesh::out << "Parametrized functions in training set initialized" << std::endl << std::endl;
@@ -522,6 +531,56 @@ void RBEIMConstruction::update_eim_matrices()
         evaluate_mesh_function( eim_eval.interpolation_points_var[RB_size-1],
                                 eim_eval.interpolation_points[RB_size-1] );
     }
+}
+
+Number RBEIMConstruction::inner_product(
+  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
+  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & w)
+{
+  Number val = 0.;
+
+  for (const auto & [elem_id, v_var_and_qp] : v)
+    {
+      auto w_var_and_qp_it = w.find(elem_id);
+      if(w_var_and_qp_it == w.end())
+        libmesh_error_msg("Error: elem_id not found");
+      const auto & w_var_and_qp = w_var_and_qp_it->second;
+
+      auto _local_quad_point_JxW_it = _local_quad_point_JxW.find(elem_id);
+      if(w_var_and_qp_it == w.end())
+        libmesh_error_msg("Error: elem_id not found");
+      const auto & JxW = _local_quad_point_JxW_it->second;
+
+      for (const auto & var : index_range(v_var_and_qp))
+        {
+          const std::vector<Number> & v_qp = v_var_and_qp[var];
+          const std::vector<Number> & w_qp = w_var_and_qp[var];
+
+          for (unsigned int qp : index_range(JxW))
+            val += JxW[qp] * v_qp[qp] * w_qp[qp];
+        }
+    }
+
+  comm().sum(val);
+  return val;
+}
+
+Real RBEIMConstruction::get_max_abs_value(const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v) const
+{
+  Real max_value = 0.;
+
+  for (const auto & [elem_id, v_var_and_qp] : v)
+    {
+      for (const auto & var : index_range(v_var_and_qp))
+        {
+          const std::vector<Number> & v_qp = v_var_and_qp[var];
+          for (unsigned int qp : index_range(JxW))
+            max_value = std::max(max_value, std::abs(v_qp[qp]);
+        }
+    }
+
+  comm().max(max_value);
+  return max_value;
 }
 
 } // namespace libMesh
