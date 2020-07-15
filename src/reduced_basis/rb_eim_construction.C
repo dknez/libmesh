@@ -134,6 +134,8 @@ void RBEIMConstruction::initialize_eim_construction()
 {
   initialize_quad_point_data();
   initialize_parametrized_functions_in_training_set();
+
+  _eim_projection_matrix.resize(Nmax,Nmax);
 }
 
 Real RBEIMConstruction::train_eim_approximation()
@@ -177,7 +179,7 @@ Real RBEIMConstruction::compute_best_fit_error()
         // Now compute the best fit by an LU solve
         get_rb_evaluation().RB_solution.resize(RB_size);
         DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
-        get_rb_evaluation().RB_inner_product_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
+        _eim_projection_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
 
         RB_inner_product_matrix_N.lu_solve(best_fit_rhs, get_rb_evaluation().RB_solution);
         break;
@@ -493,12 +495,12 @@ void RBEIMConstruction::update_eim_matrices()
               }
 
             Number value = explicit_sys_temp->dot( get_rb_evaluation().get_basis_function(i) );
-            get_rb_evaluation().RB_inner_product_matrix(i,j) = value;
+            _eim_projection_matrix(i,j) = value;
             if (i!=j)
               {
                 // The inner product matrix is assumed
                 // to be hermitian
-                get_rb_evaluation().RB_inner_product_matrix(j,i) = libmesh_conj(value);
+                _eim_projection_matrix(j,i) = libmesh_conj(value);
               }
           }
       }

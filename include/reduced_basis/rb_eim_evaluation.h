@@ -65,23 +65,13 @@ public:
    * Resize the data structures for storing data associated
    * with this object.
    */
-  virtual void resize_data_structures(const unsigned int Nmax,
-                                      bool resize_error_bound_data=true) override;
+  void resize_data_structures(const unsigned int Nmax);
 
   /**
    * Attach the parametrized function that we will approximate
    * using the Empirical Interpolation Method.
    */
   void attach_parametrized_function(RBParametrizedFunction * pf);
-
-
-  /**
-   * Get the number of parametrized functions that have
-   * been attached to this system. Each function will
-   * be approximated by a separate variable in our EIM
-   * approximation.
-   */
-  unsigned int get_n_parametrized_functions() const;
 
   /**
    * Evaluate the parametrized function for each entry in \p var_indices, \p qps,

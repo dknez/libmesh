@@ -174,6 +174,12 @@ private:
   virtual void update_eim_matrices();
 
   /**
+   * The matrix we use in order to perform L2 projections of
+   * parametrized functions as part of EIM training.
+   */
+  DenseMatrix<Number> _eim_projection_matrix;
+
+  /**
    * The RBEIMEvaluation object that we use to perform the EIM training.
    */
   RBEIMEvaluation * _rb_eim_eval;
