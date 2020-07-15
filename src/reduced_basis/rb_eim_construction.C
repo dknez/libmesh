@@ -224,12 +224,10 @@ void RBEIMConstruction::init_context(FEMContext & c)
       {
         auto fe = c.get_element_fe(var, dim);
         fe->get_JxW();
-        fe->get_phi();
         fe->get_xyz();
 
         auto side_fe = c.get_side_fe(var, dim);
         side_fe->get_JxW();
-        side_fe->get_phi();
         side_fe->get_xyz();
       }
 }
@@ -238,16 +236,11 @@ void RBEIMConstruction::enrich_eim_approximation()
 {
   LOG_SCOPE("enrich_eim_approximation()", "RBEIMConstruction");
 
-  // put solution in _ghosted_meshfunction_vector so we can access it from the mesh function
-  // this allows us to compute EIM_rhs appropriately
-  get_explicit_system().solution->localize(*_ghosted_meshfunction_vector,
-                                           get_explicit_system().get_dof_map().get_send_list());
-
   RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
   // If we have at least one basis function we need to use
   // rb_eim_solve() to find the EIM interpolation error, otherwise just use solution as is
-  if (get_rb_evaluation().get_n_basis_functions() > 0)
+  if (get_rb_eim_evaluation().get_n_basis_functions() > 0)
     {
       // get the right-hand side vector for the EIM approximation
       // by sampling the parametrized function (stored in solution)
@@ -474,10 +467,11 @@ void RBEIMConstruction::update_eim_matrices()
 {
   LOG_SCOPE("update_eim_matrices()", "RBEIMConstruction");
 
+  RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
+  unsigned int RB_size = eim_eval.get_n_basis_functions();
+
   // First, update the inner product matrix
   {
-    unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
-
     std::unique_ptr<NumericVector<Number>> explicit_sys_temp =
       get_explicit_system().solution->zero_clone();
 
@@ -488,48 +482,27 @@ void RBEIMConstruction::update_eim_matrices()
       {
         for (unsigned int j=0; j<RB_size; j++)
           {
-            // We must localize get_rb_evaluation().get_basis_function(j) before calling
-            // get_explicit_sys_subvector
-            std::unique_ptr<NumericVector<Number>> localized_basis_function =
-              NumericVector<Number>::build(this->comm());
-            localized_basis_function->init(get_explicit_system().n_dofs(), false, SERIAL);
-            get_rb_evaluation().get_basis_function(j).localize(*localized_basis_function);
-
-            // Compute reduced inner_product_matrix via a series of matvecs
-            for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
-              {
-                get_explicit_sys_subvector(*temp1, var, *localized_basis_function);
-                inner_product_matrix->vector_mult(*temp2, *temp1);
-                set_explicit_sys_subvector(*explicit_sys_temp, var, *temp2);
-              }
-
-            Number value = explicit_sys_temp->dot( get_rb_evaluation().get_basis_function(i) );
-            _eim_projection_matrix(i,j) = value;
+            _eim_projection_matrix(i,j) = inner_product(eim_eval.get_basis_function(i),
+                                                        eim_eval.get_basis_function(j));
             if (i!=j)
               {
-                // The inner product matrix is assumed
-                // to be hermitian
+                // The inner product matrix is assumed to be hermitian
                 _eim_projection_matrix(j,i) = libmesh_conj(value);
               }
           }
       }
   }
 
-  unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
-
-  RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
-
   // update the EIM interpolation matrix
   for (unsigned int j=0; j<RB_size; j++)
     {
-      // Sample the basis functions at the
-      // new interpolation point
-      get_rb_evaluation().get_basis_function(j).localize(*_ghosted_meshfunction_vector,
-                                                         get_explicit_system().get_dof_map().get_send_list());
-
+      // Evaluate the basis functions at the new interpolation point in order
+      // to update the interpolation matrix
       eim_eval.interpolation_matrix(RB_size-1,j) =
-        evaluate_mesh_function( eim_eval.interpolation_points_var[RB_size-1],
-                                eim_eval.interpolation_points[RB_size-1] );
+        eim_eval.get_eim_basis_function_value(j,
+                                              eim_eval.get_interpolation_points_elem_id(RB_size-1),
+                                              eim_eval.get_interpolation_points_comp(RB_size-1),
+                                              eim_eval.get_interpolation_points_qp(RB_size-1));
     }
 }
 

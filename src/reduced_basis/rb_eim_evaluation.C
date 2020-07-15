@@ -151,6 +151,24 @@ void RBEIMEvaluation::rb_eim_solve(DenseVector<Number> & EIM_rhs)
   interpolation_matrix_N.lu_solve(EIM_rhs, _rb_eim_solution);
 }
 
+unsigned int RBEIMEvaluation::get_n_basis_functions() const
+{
+  return _local_eim_basis_functions.size();
+}
+
+void RBEIMEvaluation::decrement_vector(std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
+                                       const DenseVector<Number> & coeffs)
+{
+  if(get_n_basis_functions() != coeffs.size())
+    libmesh_error_msg("Error: Number of coefficients should match number of basis functions");
+
+  for (unsigned int i : index_range(_local_eim_basis_functions))
+    for (const auto & [elem_id, v_var_and_qp] : v)
+      for (const auto & var : index_range(v_var_and_qp))
+        for (unsigned int qp : index_range(v_var_and_qp[var]))
+          v[elem_id][var][qp] -= get_rb_eim_solution()(i) * _local_eim_basis_functions[i][elem_id][var][qp];
+}
+
 void RBEIMEvaluation::initialize_eim_theta_objects()
 {
   // Initialize the rb_theta objects that access the solution from this rb_eim_evaluation
@@ -198,15 +216,103 @@ void RBEIMEvaluation::get_eim_basis_function_value_at_qps(unsigned int basis_fun
   }
 }
 
-const DenseVector<Number> & RBEIMEvaluation::get_rb_eim_solution() const
+Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function_index,
+                                                     dof_id_type elem_id,
+                                                     unsigned int comp,
+                                                     unsigned int qp) const
 {
-  return _rb_eim_solution;
+  std::vector<Number> values;
+  get_eim_basis_function_value_at_qps(basis_function_index, elem_id, comp);
+  return values[qp];
 }
 
 const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> &
   RBEIMEvaluation::get_basis_function(unsigned int i) const
 {
   return _local_eim_basis_functions[i];
+}
+
+const DenseVector<Number> & RBEIMEvaluation::get_rb_eim_solution() const
+{
+  return _rb_eim_solution;
+}
+
+void RBEIMEvaluation::add_interpolation_points_xyz(Point p)
+{
+  _interpolation_points_xyz.emplace_back(p);
+}
+
+void RBEIMEvaluation::add_interpolation_points_comp(unsigned int comp)
+{
+  _interpolation_points_comp.emplace_back(comp);
+}
+
+void RBEIMEvaluation::add_interpolation_points_subdomain_id(subdomain_id_type sbd_id)
+{
+  _interpolation_points_subdomain_id.emplace_back(sbd_id);
+}
+
+void RBEIMEvaluation::add_interpolation_points_elem_id(dof_id_type elem_id)
+{
+  _interpolation_points_elem_id.emplace_back(elem_id);
+}
+
+void RBEIMEvaluation::add_interpolation_points_qp(unsigned int qp)
+{
+  _interpolation_points_qp.emplace_back(qp);
+}
+
+Point RBEIMEvaluation::get_interpolation_points_xyz(unsigned int index) const
+{
+  if(index >= _interpolation_points_xyz.size())
+    libmesh_error_msg("Error: Invalid index");
+
+  return _interpolation_points_xyz[index];
+}
+
+unsigned int RBEIMEvaluation::get_interpolation_points_comp(unsigned int index) const
+{
+  if(index >= _interpolation_points_comp.size())
+    libmesh_error_msg("Error: Invalid index");
+
+  return _interpolation_points_comp[index];
+}
+
+subdomain_id_type RBEIMEvaluation::get_interpolation_points_subdomain_id(unsigned int index) const
+{
+  if(index >= _interpolation_points_subdomain_id.size())
+    libmesh_error_msg("Error: Invalid index");
+
+  return _interpolation_points_subdomain_id[index];
+}
+
+dof_id_type RBEIMEvaluation::get_interpolation_points_elem_id(unsigned int index) const
+{
+  if(index >= _interpolation_points_elem_id.size())
+    libmesh_error_msg("Error: Invalid index");
+
+  return _interpolation_points_elem_id[index];
+}
+
+unsigned int RBEIMEvaluation::get_interpolation_points_qp(unsigned int index) const
+{
+  if(index >= _interpolation_points_qp.size())
+    libmesh_error_msg("Error: Invalid index");
+
+  return _interpolation_points_qp[index];
+}
+
+void RBEIMEvaluation::set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value)
+{
+  if((i >= _interpolation_matrix.m()) || (j >= _interpolation_matrix.n())
+    libmesh_error_msg("Error: Invalid matrix indices");
+
+  _interpolation_matrix(i,j) = value;
+}
+
+const DenseMatrix<Number> & RBEIMEvaluation::get_interpolation_matrix() const
+{
+  return _interpolation_matrix;
 }
 
 }

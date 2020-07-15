@@ -95,6 +95,17 @@ public:
   void rb_eim_solve(DenseVector<Number> & EIM_rhs);
 
   /**
+   * Return the current number of EIM basis functions.
+   */
+  unsigned int get_n_basis_functions() const;
+
+  /**
+   * Subtract coeffs[i]*basis_function[i] from \p v.
+   */
+  void decrement_vector(std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
+                        const DenseVector<Number> & coeffs);
+
+  /**
    * Build a vector of RBTheta objects that accesses the components
    * of the RB_solution member variable of this RBEvaluation.
    * Store these objects in the member vector rb_theta_objects.
@@ -126,16 +137,53 @@ public:
                                             std::vector<Number> & values) const;
 
   /**
-   * Return a const reference to the EIM solution coefficients from the most
-   * recent solve.
+   * Same as above, except that we just return the value at the qp^th
+   * quadrature point.
    */
-  const DenseVector<Number> & get_rb_eim_solution() const;
+  Number get_eim_basis_function_value(unsigned int basis_function_index,
+                                      dof_id_type elem_id,
+                                      unsigned int comp,
+                                      unsigned int qp) const;
 
   /**
    * Get a reference to the i^th basis function.
    */
   const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> &
     get_basis_function(unsigned int i) const;
+
+  /**
+   * Return a const reference to the EIM solution coefficients from the most
+   * recent solve.
+   */
+  const DenseVector<Number> & get_rb_eim_solution() const;
+
+  /**
+   * Set the data associated with EIM interpolation points.
+   */
+  void set_interpolation_points_xyz(Point p);
+  void set_interpolation_points_comp(unsigned int comp);
+  void set_interpolation_points_subdomain_id(subdomain_id_type sbd_id);
+  void set_interpolation_points_elem_id(dof_id_type elem_id);
+  void set_interpolation_points_qp(unsigned int qp);
+
+  /**
+   * Get the data associated with EIM interpolation points.
+   */
+  Point get_interpolation_points_xyz() const;
+  unsigned int get_interpolation_points_comp(unsigned int index) const;
+  subdomain_id_type get_interpolation_points_subdomain_id(unsigned int index) const;
+  dof_id_type get_interpolation_points_elem_id(unsigned int index) const;
+  unsigned int get_interpolation_points_qp(unsigned int index) const;
+
+  /**
+   * Set entry of the EIM interpolation matrix.
+   */
+  void set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value);
+
+  /**
+   * Get the EIM interpolation matrix.
+   */
+  const DenseMatrix<Number> & get_interpolation_matrix() const;
 
   /**
    * Boolean to indicate whether we evaluate a posteriori error bounds
@@ -157,22 +205,22 @@ private:
   DenseMatrix<Number> _interpolation_matrix;
 
   /**
-   * The list of interpolation points, i.e. locations at
-   * which the basis functions are maximized.
+   * We need to store interpolation point data in order to
+   * evaluate parametrized functions at the interpolation points.
+   * This requires the xyz locations, the components to evaluate,
+   * and the subdomain IDs.
    */
-  std::vector<Point> _interpolation_points;
+  std::vector<Point> _interpolation_points_xyz;
+  std::vector<unsigned int> _interpolation_points_comp;
+  std::vector<subdomain_id_type> _interpolation_points_subdomain_id;
 
   /**
-   * The corresponding list of variables indices at which
-   * the interpolation points were identified.
+   * We also store the element ID and qp index of each interpolation
+   * point so that we can evaluate our basis functions at these
+   * points by simply looking up the appropriate stored values.
    */
-  std::vector<unsigned int> _interpolation_points_var;
-
-  /**
-   * The corresponding list of subdomain IDs at which
-   * the interpolation points were identified.
-   */
-  std::vector<subdomain_id> _interpolation_points_subdomain_id;
+  std::vector<dof_id_type> _interpolation_points_elem_id;
+  std::vector<unsigned int> _interpolation_points_qp;
 
   /**
    * Store the parametrized function that will be approximated
