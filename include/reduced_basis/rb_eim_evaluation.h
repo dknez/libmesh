@@ -77,22 +77,21 @@ public:
 
   /**
    * Get the number of parametrized functions that have
-   * been attached to this system.
+   * been attached to this system. Each function will
+   * be approximated by a separate variable in our EIM
+   * approximation.
    */
   unsigned int get_n_parametrized_functions() const;
 
   /**
-   * \returns The value of the parametrized function that is being
-   * approximated at the point \p p.
-   * \p var_index specifies the
-   * variable (i.e. the parametrized function index) to be evaluated.
-   * \p subdomain_id specifies the mesh subdomain that p belongs to,
-   * since this enables us to define parametrized functions in a
-   * piecewise manner based on subdomains.
+   * Evaluate the parametrized function for each entry in \p var_indices, \p qps,
+   * and \p subdomani_ids, and set the corresponding value of the values vector
+   * for each evaluation.
    */
-  Number evaluate_parametrized_function(unsigned int var_index,
-                                        const Point & p,
-                                        subdomain_id_type subdomain_id);
+  void evaluate_parametrized_function(unsigned int var,
+                                      const std::vector<Point> & qps,
+                                      const std::vector<subdomain_id_type> & subdomain_ids,
+                                      std::vector<Number> & values);
 
   /**
    * Calculate the EIM approximation to parametrized_function
@@ -148,9 +147,9 @@ public:
 
   /**
    * Boolean to indicate whether we evaluate a posteriori error bounds
-   * when rb_solve is called.
+   * when eim_solve is called.
    */
-  bool evaluate_RB_error_bound;
+  bool evaluate_eim_error_bound;
 
 private:
 

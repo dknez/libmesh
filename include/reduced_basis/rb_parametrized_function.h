@@ -47,12 +47,29 @@ public:
   virtual ~RBParametrizedFunction() {}
 
   /**
-   * Evaluate this parametrized function for the parameter value
-   * \p mu at the point \p p.
+   * Specify the number of components in this parametrized function.
+   * A scalar-valued function has one component, a vector-valued
+   * function has more than one component.
    */
-  virtual Number evaluate(const RBParameters &,
-                          const Point &,
-                          subdomain_id_type ) { return 0.; }
+  virtual unsigned int get_n_components() const { return 0; }
+
+  /**
+   * Pre-evaluate the parametrized function for the specified RBParameters
+   * at the specified points and subdomain_ids. The results from this
+   * preevaluation will be stored and then looked up in the subsequent
+   * evaluate operation.
+   */
+  virtual void preevaluate_parametrized_function(const RBParameters & /*mu*/,
+                                                 const std::unordered_map<dof_id_type, std::vector<Point>> > & /*xyz*/,
+                                                 std::unordered_map<dof_id_type, std::vector<Real>> > /*sbd_ids*/) {}
+
+  /**
+   * Look up the preevaluate values of the parametrized function for
+   * component \p comp, element \p elem_id, and quadrature point \p qp.
+   */
+  virtual Number evaluate(unsigned int /*comp*/,
+                          dof_id_type /*elem_id*/,
+                          unsigned int /*qp*/) { return 0.; }
 };
 
 }

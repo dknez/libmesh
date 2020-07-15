@@ -65,7 +65,7 @@ RBEIMConstruction::~RBEIMConstruction ()
 
 void RBEIMConstruction::clear()
 {
-  Parent::clear();
+  RBConstructionBase::clear();
 
   // clear the eim assembly vector
   _rb_eim_assembly_objects.clear();
@@ -74,10 +74,17 @@ void RBEIMConstruction::clear()
   _local_parametrized_functions_for_training.clear();
 }
 
-void RBEIMConstruction::initalize_eim_construction()
+void RBEIMConstruction::set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in)
 {
-  initialize_quad_point_data();
-  initialize_parametrized_functions_in_training_set();
+  _rb_eim_eval = &rb_eim_eval_in;
+}
+
+RBEIMEvaluation & RBEIMConstruction::get_rb_eim_evaluation()
+{
+  if (!_rb_eim_eval)
+    libmesh_error_msg("Error: RBEIMEvaluation object hasn't been initialized yet");
+
+  return *_rb_eim_eval;
 }
 
 void RBEIMConstruction::process_parameters_file (const std::string & parameters_filename)
@@ -123,33 +130,10 @@ void RBEIMConstruction::print_info()
   libMesh::out << std::endl;
 }
 
-void RBEIMConstruction::initialize_rb_construction(bool skip_matrix_assembly,
-                                                   bool skip_vector_assembly)
+void RBEIMConstruction::initialize_eim_construction()
 {
-  RBConstructionBase::initialize_rb_construction(skip_matrix_assembly, skip_vector_assembly);
-
-  // initialize a serial vector that we will use for MeshFunction evaluations
-  _ghosted_meshfunction_vector = NumericVector<Number>::build(this->comm());
-  _ghosted_meshfunction_vector->init (get_explicit_system().n_dofs(), get_explicit_system().n_local_dofs(),
-                                      get_explicit_system().get_dof_map().get_send_list(), false,
-                                      GHOSTED);
-
-  // Initialize the MeshFunction for interpolating the
-  // solution vector at quadrature points
-  std::vector<unsigned int> vars;
-  get_explicit_system().get_all_variable_numbers(vars);
-  _mesh_function = libmesh_make_unique<MeshFunction>
-    (get_equation_systems(),
-     *_ghosted_meshfunction_vector,
-     get_explicit_system().get_dof_map(),
-     vars);
-  _mesh_function->init();
-
-  // inner_product_solver performs solves with the same matrix every time
-  // hence we can set reuse_preconditioner(true).
-  inner_product_solver->reuse_preconditioner(true);
-
-  init_dof_map_between_systems();
+  initialize_quad_point_data();
+  initialize_parametrized_functions_in_training_set();
 }
 
 Real RBEIMConstruction::train_eim_approximation()
@@ -257,7 +241,7 @@ void RBEIMConstruction::enrich_eim_approximation()
   get_explicit_system().solution->localize(*_ghosted_meshfunction_vector,
                                            get_explicit_system().get_dof_map().get_send_list());
 
-  RBEIMEvaluation & eim_eval = cast_ref<RBEIMEvaluation &>(get_rb_evaluation());
+  RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
   // If we have at least one basis function we need to use
   // rb_solve to find the EIM interpolation error, otherwise just use solution as is
@@ -415,137 +399,64 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
                       << "RBEIMConstruction::initialize_parametrized_functions_in_training_set");
 
   libMesh::out << "Initializing parametrized functions in training set..." << std::endl;
-  // initialize rb_eval's parameters
+
+  // Store the locations of all quadrature points
+  initialize_qp_data();
+
   get_rb_evaluation().initialize_parameters(*this);
 
   _local_parametrized_functions_for_training.resize( get_n_training_samples() );
   for (unsigned int i=0; i<get_n_training_samples(); i++)
     {
       set_params_from_training_set(i);
-      evaluate_parametrized_function_at_all_qps(i);
+      eim_eval.get_parametrized_function().preevaluate_parametrized_function(get_parameters(),
+                                                                             _local_quad_point_locations,
+                                                                             _local_quad_point_subdomain_ids);
 
-      libMesh::out << "Completed solve for training sample " << (i+1) << " of " << get_n_training_samples() << std::endl;
+      for (unsigned int comp : index_range(eim_eval().get_n_parametrized_functions().get_n_components())
+        for (const auto & [elem_id,xyz_vector] : _local_quad_point_locations)
+          for (unsigned int qp : index_range(xyz_vector.size()))
+            {
+              _local_parametrized_functions_for_training[training_index][elem_id][var] =
+                eim_eval.evaluate_parametrized_function(comp, elem_id, qp);
+            }
+
+      libMesh::out << "Initialized data for training sample " << (i+1) << " of " << get_n_training_samples() << std::endl;
     }
-
-  _parametrized_functions_in_training_set_initialized = true;
 
   libMesh::out << "Parametrized functions in training set initialized" << std::endl << std::endl;
 }
 
-Real RBEIMConstruction::evaluate_parametrized_function_at_all_qps(unsigned int training_index)
+void RBEIMConstruction::initialize_qp_data()
 {
-  LOG_SCOPE("evaluate_parametrized_function_at_all_qps()", "RBEIMConstruction");
-
-  if (this->n_vars() != 1)
-    {
-      libmesh_error_msg("The system that we use to perform EIM L2 solves should have one variable");
-    }
-
-  RBEIMEvaluation & eim_eval = cast_ref<RBEIMEvaluation &>(get_rb_evaluation());
-  eim_eval.set_parameters( get_parameters() );
+  LOG_SCOPE("initialize_qp_data()", "RBEIMConstruction");
 
   // Compute truth representation via L2 projection
   const MeshBase & mesh = this->get_mesh();
 
-  std::unique_ptr<DGFEMContext> c = libmesh_make_unique<DGFEMContext>(*this);
-  DGFEMContext & context = cast_ref<DGFEMContext &>(*c);
+  FEMContext context(*this);
+  init_context(context);
 
-  // Pre-request required data
-  init_context_with_sys(context, *this);
-
-  // Get local references to context data (will be updated each
-  // time elem_fe_reinit() is called).
   FEBase * elem_fe = nullptr;
   context.get_element_fe( 0, elem_fe );
   const std::vector<Real> & JxW = elem_fe->get_JxW();
-  const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
   const std::vector<Point> & xyz = elem_fe->get_xyz();
 
-  // First cache all the element data
-  std::vector<std::vector<std::vector<Number>>> parametrized_fn_vals(mesh.n_elem());
-  std::vector<std::vector<Real>> JxW_values(mesh.n_elem());
-  std::vector<std::vector<std::vector<Real>>> phi_values(mesh.n_elem());
+  _local_quad_point_locations.clear();
+  _local_quad_point_subdomain_ids.clear();
+  _local_quad_point_JxW.clear();
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
       dof_id_type elem_id = elem->id();
 
-      // Recompute values for current Elem
       context.pre_fe_reinit(*this, elem);
       context.elem_fe_reinit();
 
-      // Loop over qp before var because parametrized functions often use
-      // some caching based on qp.
-      unsigned int n_qpoints = context.get_element_qrule().n_points();
-      parametrized_fn_vals[elem_id].resize(n_qpoints);
-      JxW_values[elem_id].resize(n_qpoints);
-      phi_values[elem_id].resize(n_qpoints);
-      for (unsigned int qp=0; qp<n_qpoints; qp++)
-        {
-          JxW_values[elem_id][qp] = JxW[qp];
-
-          unsigned int n_var_dofs = cast_int<unsigned int>(context.get_dof_indices().size());
-          phi_values[elem_id][qp].resize(n_var_dofs);
-          for (unsigned int i=0; i != n_var_dofs; i++)
-            {
-              phi_values[elem_id][qp][i] = phi[i][qp];
-            }
-
-          parametrized_fn_vals[elem_id][qp].resize(get_explicit_system().n_vars());
-          for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
-            {
-              Number eval_result = eim_eval.evaluate_parametrized_function(var, xyz[qp], *elem);
-              parametrized_fn_vals[elem_id][qp][var] = eval_result;
-            }
-        }
+      _local_quad_point_locations[elem_id] = xyz;
+      _local_quad_point_JxW[elem_id] = JxW;
+      _local_quad_point_subdomain_ids[elem_id] = elem->subdomain_id();
     }
-
-  // We do a distinct solve for each variable in the ExplicitSystem
-  for (unsigned int var=0; var<get_explicit_system().n_vars(); var++)
-    {
-      rhs->zero();
-
-      for (const auto & elem : mesh.active_local_element_ptr_range())
-        {
-          dof_id_type elem_id = elem->id();
-
-          context.pre_fe_reinit(*this, elem);
-          //context.elem_fe_reinit(); <--- skip this because we cached all the FE data
-
-          // Loop over qp before var because parametrized functions often use
-          // some caching based on qp.
-          for (auto qp : index_range(JxW_values[elem_id]))
-            {
-              const unsigned int n_var_dofs =
-                cast_int<unsigned int>(phi_values[elem_id][qp].size());
-
-              Number eval_result = parametrized_fn_vals[elem_id][qp][var];
-              for (unsigned int i=0; i != n_var_dofs; i++)
-                {
-                  context.get_elem_residual()(i) +=
-                    JxW_values[elem_id][qp] * eval_result * phi_values[elem_id][qp][i];
-                }
-            }
-
-          // Apply constraints, e.g. periodic constraints
-          this->get_dof_map().constrain_element_vector(context.get_elem_residual(), context.get_dof_indices() );
-
-          // Add element vector to global vector
-          rhs->add_vector(context.get_elem_residual(), context.get_dof_indices() );
-        }
-
-      // Solve to find the best fit, then solution stores the truth representation
-      // of the function to be approximated
-      solve_for_matrix_and_rhs(*inner_product_solver, *inner_product_matrix, *rhs);
-
-      if (assert_convergence)
-        check_convergence(*inner_product_solver);
-
-      // Now copy the solution to the explicit system's solution.
-      set_explicit_sys_subvector(*get_explicit_system().solution, var, *solution);
-    }
-  get_explicit_system().update();
-
 }
 
 void RBEIMConstruction::update_eim_matrices()
@@ -595,7 +506,7 @@ void RBEIMConstruction::update_eim_matrices()
 
   unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
 
-  RBEIMEvaluation & eim_eval = cast_ref<RBEIMEvaluation &>(get_rb_evaluation());
+  RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
   // update the EIM interpolation matrix
   for (unsigned int j=0; j<RB_size; j++)

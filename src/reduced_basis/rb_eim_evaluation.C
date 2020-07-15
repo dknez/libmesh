@@ -38,7 +38,7 @@ namespace libMesh
 
 RBEIMEvaluation::RBEIMEvaluation()
 :
-evaluate_RB_error_bound(true)
+evaluate_eim_error_bound(true)
 {
 }
 
@@ -79,9 +79,6 @@ Number RBEIMEvaluation::evaluate_parametrized_function(unsigned int var_index,
                                                        const Point & p,
                                                        subdomain_id_type subdomain_id)
 {
-  if (var_index >= get_n_parametrized_functions())
-    libmesh_error_msg("Error: We must have var_index < get_n_parametrized_functions() in evaluate_parametrized_function.");
-
   return _parametrized_functions[var_index]->evaluate(get_parameters(), p, subdomain_id);
 }
 
@@ -113,7 +110,7 @@ Real RBEIMEvaluation::eim_solve(unsigned int N)
   // Optionally evaluate an a posteriori error bound. The EIM error estimate
   // recommended in the literature is based on using "next" EIM point, so
   // we skip this if N == get_n_basis_functions()
-  if (evaluate_RB_error_bound && (N != get_n_basis_functions()))
+  if (evaluate_eim_error_bound && (N != get_n_basis_functions()))
     {
       // Compute the a posteriori error bound
       // First, sample the parametrized function at x_{N+1}
