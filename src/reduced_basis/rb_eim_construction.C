@@ -420,7 +420,7 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
           for (unsigned int qp : index_range(xyz_vector.size()))
             {
               comps_and_qps[comp][qp] =
-                eim_eval.evaluate_parametrized_function(comp, elem_id, qp);
+                eim_eval.get_parametrized_function().evaluate(comp, elem_id, qp);
             }
         }
 
