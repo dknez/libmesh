@@ -19,7 +19,7 @@
 
 // rbOOmit includes
 #include "libmesh/rb_eim_assembly.h"
-#include "libmesh/rb_evaluation.h"
+#include "libmesh/rb_eim_evaluation.h"
 
 // libMesh includes
 #include "libmesh/fem_context.h"
@@ -34,7 +34,7 @@ namespace libMesh
 RBEIMAssembly::RBEIMAssembly(RBEIMEvaluation & rb_eim_eval,
                              unsigned int basis_function_index_in)
   :
-  _rb_eim_eval(rb_eim_con_in),
+  _rb_eim_eval(rb_eim_eval),
   _basis_function_index(basis_function_index_in)
 {
 }
@@ -44,10 +44,11 @@ RBEIMAssembly::~RBEIMAssembly()
 }
 
 void RBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
-                                            unsigned int var,
+                                            unsigned int comp,
                                             std::vector<Number> & values)
 {
-  get_rb_eim_evaluation().get_eim_basis_function_values_at_qps(_basis_function_index, elem_id, var, values);
+  get_rb_eim_evaluation().get_eim_basis_function_values_at_qps(
+    _basis_function_index, elem_id, comp, values);
 }
 
 RBEIMEvaluation & RBEIMAssembly::get_rb_eim_evaluation()

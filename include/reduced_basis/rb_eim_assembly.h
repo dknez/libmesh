@@ -64,13 +64,14 @@ public:
    * Return the basis function values for all quadrature points for variable \p var
    * on element \p elem_id.
    */
-  std::vector<Number> evaluate_basis_function(dof_id_type elem_id,
-                                              unsigned int var);
+  void evaluate_basis_function(dof_id_type elem_id,
+                               unsigned int var,
+                               std::vector<Number> & values);
 
   /**
-   * Get a reference to the RBEIMConstruction object.
+   * Get a reference to the RBEIMEvaluation object.
    */
-  RBEIMConstruction & get_rb_eim_evaluation();
+  RBEIMEvaluation & get_rb_eim_evaluation();
 
 private:
 

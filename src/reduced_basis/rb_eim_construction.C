@@ -46,6 +46,7 @@
 // rbOOmit includes
 #include "libmesh/rb_eim_construction.h"
 #include "libmesh/rb_eim_evaluation.h"
+#include "libmesh/rb_parametrized_function.h"
 
 namespace libMesh
 {
@@ -55,7 +56,9 @@ RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
                                       const unsigned int number_in)
   : RBConstructionBase(es, name_in, number_in),
     best_fit_type_flag(PROJECTION_BEST_FIT),
-    _parametrized_functions_in_training_set_initialized(false)
+    _Nmax(0),
+    _rel_training_tolerance(1.e-4),
+    _abs_training_tolerance(1.e-12)
 {
 }
 
@@ -74,7 +77,7 @@ void RBEIMConstruction::clear()
   _local_quad_point_JxW.clear();
   _local_quad_point_subdomain_ids.clear();
 
-  _eim_projection_matrix.clear();
+  _eim_projection_matrix.resize(0,0);
 }
 
 void RBEIMConstruction::set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in)
@@ -88,16 +91,6 @@ RBEIMEvaluation & RBEIMConstruction::get_rb_eim_evaluation()
     libmesh_error_msg("Error: RBEIMEvaluation object hasn't been initialized yet");
 
   return *_rb_eim_eval;
-}
-
-void RBEIMConstruction::process_parameters_file (const std::string & parameters_filename)
-{
-  Parent::process_parameters_file(parameters_filename);
-
-  GetPot infile(parameters_filename);
-
-  std::string best_fit_type_string = infile("best_fit_type","projection");
-  set_best_fit_type_flag(best_fit_type_string);
 }
 
 void RBEIMConstruction::set_best_fit_type_flag (const std::string & best_fit_type_string)
@@ -117,18 +110,34 @@ void RBEIMConstruction::set_best_fit_type_flag (const std::string & best_fit_typ
 
 void RBEIMConstruction::print_info()
 {
-  RBConstructionBase::print_info();
-
-  // Print out setup info
+  // Print out info that describes the current setup
   libMesh::out << std::endl << "RBEIMConstruction parameters:" << std::endl;
+  libMesh::out << "system name: " << this->name() << std::endl;
+  libMesh::out << "Nmax: " << get_Nmax() << std::endl;
+  libMesh::out << "Greedy relative error tolerance: " << get_rel_training_tolerance() << std::endl;
+  libMesh::out << "Greedy absolute error tolerance: " << get_abs_training_tolerance() << std::endl;
+  libMesh::out << "Number of parameters: " << get_n_params() << std::endl;
+  for (const auto & pr : get_parameters())
+    if (!is_discrete_parameter(pr.first))
+      {
+        libMesh::out <<   "Parameter " << pr.first
+                     << ": Min = " << get_parameter_min(pr.first)
+                     << ", Max = " << get_parameter_max(pr.first) << std::endl;
+      }
+
+  print_discrete_parameter_values();
+  libMesh::out << "n_training_samples: " << get_n_training_samples() << std::endl;
+  libMesh::out << "quiet mode? " << is_quiet() << std::endl;
+  libMesh::out << std::endl;
+
   if (best_fit_type_flag == PROJECTION_BEST_FIT)
     {
-      libMesh::out << "best fit type: projection" << std::endl;
+      libMesh::out << "EIM best fit type: projection" << std::endl;
     }
   else
     if (best_fit_type_flag == EIM_BEST_FIT)
       {
-        libMesh::out << "best fit type: eim" << std::endl;
+        libMesh::out << "EIM best fit type: eim" << std::endl;
       }
   libMesh::out << std::endl;
 }
@@ -136,6 +145,119 @@ void RBEIMConstruction::print_info()
 void RBEIMConstruction::initialize_eim_construction()
 {
   initialize_parametrized_functions_in_training_set();
+}
+
+void RBEIMConstruction::process_parameters_file (const std::string & parameters_filename)
+{
+  // First read in data from input_filename
+  GetPot infile(parameters_filename);
+
+  std::string best_fit_type_string = infile("best_fit_type","projection");
+  set_best_fit_type_flag(best_fit_type_string);
+
+  const unsigned int n_training_samples = infile("n_training_samples",0);
+  const bool deterministic_training = infile("deterministic_training",false);
+  unsigned int training_parameters_random_seed_in =
+    static_cast<unsigned int>(-1);
+  training_parameters_random_seed_in = infile("training_parameters_random_seed",
+                                              training_parameters_random_seed_in);
+  const bool quiet_mode_in = infile("quiet_mode", quiet_mode);
+  const unsigned int Nmax_in = infile("Nmax", _Nmax);
+  const Real rel_training_tolerance_in = infile("rel_training_tolerance",
+                                                _rel_training_tolerance);
+  const Real abs_training_tolerance_in = infile("abs_training_tolerance",
+                                                _abs_training_tolerance);
+
+  // Read in the parameters from the input file too
+  unsigned int n_continuous_parameters = infile.vector_variable_size("parameter_names");
+  RBParameters mu_min_in;
+  RBParameters mu_max_in;
+  for (unsigned int i=0; i<n_continuous_parameters; i++)
+    {
+      // Read in the parameter names
+      std::string param_name = infile("parameter_names", "NONE", i);
+
+      {
+        Real min_val = infile(param_name, 0., 0);
+        mu_min_in.set_value(param_name, min_val);
+      }
+
+      {
+        Real max_val = infile(param_name, 0., 1);
+        mu_max_in.set_value(param_name, max_val);
+      }
+    }
+
+  std::map<std::string, std::vector<Real>> discrete_parameter_values_in;
+
+  unsigned int n_discrete_parameters = infile.vector_variable_size("discrete_parameter_names");
+  for (unsigned int i=0; i<n_discrete_parameters; i++)
+    {
+      std::string param_name = infile("discrete_parameter_names", "NONE", i);
+
+      unsigned int n_vals_for_param = infile.vector_variable_size(param_name);
+      std::vector<Real> vals_for_param(n_vals_for_param);
+      for (auto j : make_range(vals_for_param.size()))
+        vals_for_param[j] = infile(param_name, 0., j);
+
+      discrete_parameter_values_in[param_name] = vals_for_param;
+    }
+
+  std::map<std::string,bool> log_scaling_in;
+  // For now, just set all entries to false.
+  // TODO: Implement a decent way to specify log-scaling true/false
+  // in the input text file
+  for (const auto & pr : mu_min_in)
+    log_scaling_in[pr.first] = false;
+
+  // Set the parameters that have been read in
+  set_rb_construction_parameters(n_training_samples,
+                                 deterministic_training,
+                                 training_parameters_random_seed_in,
+                                 quiet_mode_in,
+                                 Nmax_in,
+                                 rel_training_tolerance_in,
+                                 abs_training_tolerance_in,
+                                 mu_min_in,
+                                 mu_max_in,
+                                 discrete_parameter_values_in,
+                                 log_scaling_in);
+}
+
+void RBEIMConstruction::set_rb_construction_parameters(unsigned int n_training_samples_in,
+                                                       bool deterministic_training_in,
+                                                       unsigned int training_parameters_random_seed_in,
+                                                       bool quiet_mode_in,
+                                                       unsigned int Nmax_in,
+                                                       Real rel_training_tolerance_in,
+                                                       Real abs_training_tolerance_in,
+                                                       RBParameters mu_min_in,
+                                                       RBParameters mu_max_in,
+                                                       std::map<std::string, std::vector<Real>> discrete_parameter_values_in,
+                                                       std::map<std::string,bool> log_scaling_in)
+{
+  // Read in training_parameters_random_seed value.  This is used to
+  // seed the RNG when picking the training parameters.  By default the
+  // value is -1, which means use std::time to seed the RNG.
+  set_training_random_seed(training_parameters_random_seed_in);
+
+  // Set quiet mode
+  set_quiet_mode(quiet_mode_in);
+
+  // Initialize RB parameters
+  set_Nmax(Nmax_in);
+
+  set_rel_training_tolerance(rel_training_tolerance_in);
+  set_abs_training_tolerance(abs_training_tolerance_in);
+
+  // Initialize the parameter ranges and the parameters themselves
+  initialize_parameters(mu_min_in, mu_max_in, discrete_parameter_values_in);
+
+  initialize_training_parameters(this->get_parameters_min(),
+                                 this->get_parameters_max(),
+                                 n_training_samples_in,
+                                 log_scaling_in,
+                                 deterministic_training_in);
 }
 
 void RBEIMConstruction::train_eim_approximation()
@@ -170,7 +292,7 @@ void RBEIMConstruction::train_eim_approximation()
       greedy_param_list.emplace_back(get_parameters());
 
       libMesh::out << "Enriching the EIM approximation" << std::endl;
-      enrich_eim_approximation();
+      enrich_eim_approximation(current_training_index);
       update_eim_matrices();
 
       libMesh::out << std::endl << "---- Basis dimension: "
@@ -200,14 +322,14 @@ void RBEIMConstruction::train_eim_approximation()
             break;
           }
 
-        if (abs_greedy_error < this->abs_training_tolerance)
+        if (abs_greedy_error < get_abs_training_tolerance())
           {
             libMesh::out << "Absolute error tolerance reached." << std::endl;
             break;
           }
 
-        Real rel_greedy_error = abs_greedy_error/initial_error;
-        if (rel_greedy_error < this->rel_training_tolerance)
+        Real rel_greedy_error = abs_greedy_error/initial_greedy_error;
+        if (rel_greedy_error < get_rel_training_tolerance())
           {
             libMesh::out << "Relative error tolerance reached." << std::endl;
             break;
@@ -234,7 +356,7 @@ void RBEIMConstruction::train_eim_approximation()
 void RBEIMConstruction::initialize_eim_assembly_objects()
 {
   _rb_eim_assembly_objects.clear();
-  for (unsigned int i=0; i<get_rb_evaluation().get_n_basis_functions(); i++)
+  for (unsigned int i=0; i<get_rb_eim_evaluation().get_n_basis_functions(); i++)
     _rb_eim_assembly_objects.push_back(build_eim_assembly(i));
 }
 
@@ -290,13 +412,14 @@ void RBEIMConstruction::get_parametrized_function_values_at_qps(
 }
 
 Number RBEIMConstruction::get_parametrized_function_value(
+  const Parallel::Communicator & comm,
   const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
   dof_id_type elem_id,
   unsigned int comp,
   unsigned int qp)
 {
   std::vector<Number> values;
-  get_function_values_at_qps(pf, elem_id, comp);
+  get_parametrized_function_values_at_qps(pf, elem_id, comp, values);
 
   // In parallel, values should only be non-empty on one processor
   Number value = 0.;
@@ -307,19 +430,49 @@ Number RBEIMConstruction::get_parametrized_function_value(
 
     value = values[qp];
   }
-  comm().sum(value);
+  comm.sum(value);
 
   return value;
 }
 
-std::pair<Real, unsigned int> RBEIMConstruction::compute_max_eim_error()
+void RBEIMConstruction::set_rel_training_tolerance(Real new_training_tolerance)
+{
+  _rel_training_tolerance = new_training_tolerance;
+}
+
+Real RBEIMConstruction::get_rel_training_tolerance()
+{
+  return _rel_training_tolerance;
+}
+
+void RBEIMConstruction::set_abs_training_tolerance(Real new_training_tolerance)
+{
+  _abs_training_tolerance = new_training_tolerance;
+}
+
+Real RBEIMConstruction::get_abs_training_tolerance()
+{
+  return _abs_training_tolerance;
+}
+
+unsigned int RBEIMConstruction::get_Nmax() const
+{
+  return _Nmax;
+}
+
+void RBEIMConstruction::set_Nmax(unsigned int Nmax)
+{
+  _Nmax = Nmax;
+}
+
+std::pair<Real,unsigned int> RBEIMConstruction::compute_max_eim_error()
 {
   LOG_SCOPE("compute_max_eim_error()", "RBEIMConstruction");
 
   if (get_n_params() == 0)
     {
       // Just return 0 if we have no parameters.
-      return std::make_pair<Real, unsigned int>(0.,0);
+      return std::make_pair(0.,0);
     }
 
   // keep track of the maximum error
@@ -340,7 +493,7 @@ std::pair<Real, unsigned int> RBEIMConstruction::compute_max_eim_error()
         }
     }
 
-  return std::make_pair<Real, unsigned int>(max_err,max_err_index);
+  return std::make_pair(max_err,max_err_index);
 }
 
 void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
@@ -356,6 +509,8 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   // Store the locations of all quadrature points
   initialize_qp_data();
 
+  RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
+
   _local_parametrized_functions_for_training.resize( get_n_training_samples() );
   for (unsigned int i=0; i<get_n_training_samples(); i++)
     {
@@ -367,15 +522,18 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
                                                                              _local_quad_point_locations,
                                                                              _local_quad_point_subdomain_ids);
 
-      unsigned int n_comps = eim_eval().get_n_parametrized_functions().get_n_components();
+      unsigned int n_comps = eim_eval.get_parametrized_function().get_n_components();
 
-      for (const auto & [elem_id,xyz_vector] : _local_quad_point_locations)
+      for (const auto local_quad_point_locations_it : _local_quad_point_locations)
       {
+        dof_id_type elem_id = local_quad_point_locations_it.first;
+        const auto & xyz_vector = local_quad_point_locations_it.second;
+
         std::vector<std::vector<Number>> comps_and_qps(n_comps);
-        for (unsigned int comp : index_range(n_comps))
+        for (unsigned int comp=0; comp<n_comps; comp++)
           {
             comps_and_qps[comp].resize(xyz_vector.size());
-            for (unsigned int qp : index_range(xyz_vector.size()))
+            for (unsigned int qp : index_range(xyz_vector))
               {
                 comps_and_qps[comp][qp] =
                   eim_eval.get_parametrized_function().evaluate(comp, elem_id, qp);
@@ -429,22 +587,25 @@ Number RBEIMConstruction::inner_product(
 
   Number val = 0.;
 
-  for (const auto & [elem_id, v_var_and_qp] : v)
+  for (const auto v_it : v)
     {
-      auto w_var_and_qp_it = w.find(elem_id);
-      if(w_var_and_qp_it == w.end())
+      dof_id_type elem_id = v_it.first;
+      const auto & v_comp_and_qp = v_it.second;
+
+      auto w_comp_and_qp_it = w.find(elem_id);
+      if(w_comp_and_qp_it == w.end())
         libmesh_error_msg("Error: elem_id not found");
-      const auto & w_var_and_qp = w_var_and_qp_it->second;
+      const auto & w_comp_and_qp = w_comp_and_qp_it->second;
 
       auto _local_quad_point_JxW_it = _local_quad_point_JxW.find(elem_id);
-      if(w_var_and_qp_it == w.end())
+      if(w_comp_and_qp_it == w.end())
         libmesh_error_msg("Error: elem_id not found");
       const auto & JxW = _local_quad_point_JxW_it->second;
 
-      for (const auto & var : index_range(v_var_and_qp))
+      for (const auto & comp : index_range(v_comp_and_qp))
         {
-          const std::vector<Number> & v_qp = v_var_and_qp[var];
-          const std::vector<Number> & w_qp = w_var_and_qp[var];
+          const std::vector<Number> & v_qp = v_comp_and_qp[comp];
+          const std::vector<Number> & w_qp = w_comp_and_qp[comp];
 
           for (unsigned int qp : index_range(JxW))
             val += JxW[qp] * v_qp[qp] * w_qp[qp];
@@ -461,13 +622,15 @@ Real RBEIMConstruction::get_max_abs_value(const std::unordered_map<dof_id_type, 
 
   Real max_value = 0.;
 
-  for (const auto & [elem_id, v_var_and_qp] : v)
+  for (const auto v_it : v)
     {
-      for (const auto & var : index_range(v_var_and_qp))
+      const auto & v_comp_and_qp = v_it.second;
+
+      for (const auto & comp : index_range(v_comp_and_qp))
         {
-          const std::vector<Number> & v_qp = v_var_and_qp[var];
-          for (unsigned int qp : index_range(JxW))
-            max_value = std::max(max_value, std::abs(v_qp[qp]);
+          const std::vector<Number> & v_qp = v_comp_and_qp[comp];
+          for (Number value : v_qp)
+            max_value = std::max(max_value, std::abs(value));
         }
     }
 
@@ -495,12 +658,13 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
       // Get the right-hand side vector for the EIM approximation
       // by sampling the parametrized function (stored in solution)
       // at the interpolation points.
-      unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
+      unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
       DenseVector<Number> EIM_rhs(RB_size);
       for (unsigned int i=0; i<RB_size; i++)
         {
           EIM_rhs(i) =
-            get_parametrized_function_value(local_pf,
+            get_parametrized_function_value(comm(),
+                                            local_pf,
                                             eim_eval.get_interpolation_points_elem_id(i),
                                             eim_eval.get_interpolation_points_comp(i),
                                             eim_eval.get_interpolation_points_qp(i));
@@ -520,17 +684,20 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
   Point optimal_point;
   unsigned int optimal_comp = 0;
   dof_id_type optimal_elem_id = DofObject::invalid_id;
-  subdomain_id optimal_subdomain_id = 0;
+  subdomain_id_type optimal_subdomain_id = 0;
   unsigned int optimal_qp = 0;
 
   // Initialize largest_abs_value to be negative so that it definitely gets updated.
   Real largest_abs_value = -1.;
 
-  for (const auto & [elem_id, comp_and_qp] : local_pf)
+  for (const auto local_pf_it : local_pf)
     {
+      dof_id_type elem_id = local_pf_it.first;
+      const auto & comp_and_qp = local_pf_it.second;
+
       for (const auto & comp : index_range(comp_and_qp))
         {
-          const std::vector<Number> & qp_values = comp_and_qp_values[comp];
+          const std::vector<Number> & qp_values = comp_and_qp[comp];
 
           for (unsigned int qp : index_range(qp_values))
             {
@@ -555,9 +722,7 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
                   auto subdomain_it = _local_quad_point_subdomain_ids.find(elem_id);
                   if(subdomain_it == _local_quad_point_subdomain_ids.end())
                     libmesh_error_msg("Error: Invalid element ID");
-                  if(qp >= subdomain_it->second.size())
-                    libmesh_error_msg("Error: Invalid qp");
-                  optimal_subdomain_id = subdomain_it->second[qp];
+                  optimal_subdomain_id = subdomain_it->second;
                 }
             }
         }
@@ -604,8 +769,10 @@ void RBEIMConstruction::update_eim_matrices()
     {
       for (unsigned int j=0; j<RB_size; j++)
         {
-          _eim_projection_matrix(i,j) = inner_product(eim_eval.get_basis_function(i),
-                                                      eim_eval.get_basis_function(j));
+          Number value = inner_product(eim_eval.get_basis_function(i),
+                                       eim_eval.get_basis_function(j));
+
+          _eim_projection_matrix(i,j) = value;
           if (i!=j)
             {
               // The inner product matrix is assumed to be hermitian
@@ -619,11 +786,13 @@ void RBEIMConstruction::update_eim_matrices()
     {
       // Evaluate the basis functions at the new interpolation point in order
       // to update the interpolation matrix
-      eim_eval.interpolation_matrix(RB_size-1,j) =
+      Number value =
         eim_eval.get_eim_basis_function_value(j,
                                               eim_eval.get_interpolation_points_elem_id(RB_size-1),
                                               eim_eval.get_interpolation_points_comp(RB_size-1),
                                               eim_eval.get_interpolation_points_qp(RB_size-1));
+      eim_eval.set_interpolation_matrix_entry(RB_size-1, j, value);
+
     }
 }
 
@@ -638,7 +807,7 @@ Real RBEIMConstruction::compute_best_fit_error(unsigned int training_index)
   std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> solution =
     _local_parametrized_functions_for_training[training_index];
 
-  const unsigned int RB_size = get_rb_evaluation().get_n_basis_functions();
+  const unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
   DenseVector<Number> best_fit_coeffs;
 
   switch(best_fit_type_flag)
@@ -666,10 +835,10 @@ Real RBEIMConstruction::compute_best_fit_error(unsigned int training_index)
         // (rb_eim_solve provides the EIM basis function coefficients used below)
 
         // Turn off error estimation for this rb_eim_solve, we use the linfty norm instead
-        get_rb_eim_evaluation().evaluate_RB_error_bound = false;
+        get_rb_eim_evaluation().evaluate_eim_error_bound = false;
         get_rb_eim_evaluation().set_parameters( get_parameters() );
         get_rb_eim_evaluation().rb_eim_solve(RB_size);
-        get_rb_eim_evaluation().evaluate_RB_error_bound = true;
+        get_rb_eim_evaluation().evaluate_eim_error_bound = true;
 
         best_fit_coeffs = get_rb_eim_evaluation().get_rb_eim_solution();
         break;
@@ -690,11 +859,13 @@ void RBEIMConstruction::scale_parametrized_function(
 {
   LOG_SCOPE("scale_parametrized_function()", "RBEIMConstruction");
 
-  for (auto & [elem_id, comp_and_qp] : local_pf)
+  for (auto local_pf_it : local_pf)
     {
-      for (auto & comp : index_range(comp_and_qp))
+      auto & comp_and_qp = local_pf_it.second;
+
+      for (unsigned int comp : index_range(comp_and_qp))
         {
-          std::vector<Number> & qp_values = comp_and_qp_values[comp];
+          std::vector<Number> & qp_values = comp_and_qp[comp];
 
           for (unsigned int qp : index_range(qp_values))
             {

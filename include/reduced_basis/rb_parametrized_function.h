@@ -60,8 +60,8 @@ public:
    * evaluate operation.
    */
   virtual void preevaluate_parametrized_function(const RBParameters & /*mu*/,
-                                                 const std::unordered_map<dof_id_type, std::vector<Point>> > & /*xyz*/,
-                                                 std::unordered_map<dof_id_type, std::vector<Real>> > /*sbd_ids*/) = 0;
+                                                 const std::unordered_map<dof_id_type, std::vector<Point>> & /*xyz*/,
+                                                 std::unordered_map<dof_id_type, subdomain_id_type> /*sbd_ids*/) = 0;
 
   /**
    * Look up the preevaluate values of the parametrized function for

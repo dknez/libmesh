@@ -82,13 +82,29 @@ public:
    * Perform initialization of this object to prepare for running
    * train_eim_approximation().
    */
-  void initalize_eim_construction();
+  void initialize_eim_construction();
 
   /**
    * Read parameters in from file and set up this system
    * accordingly.
    */
-  virtual void process_parameters_file (const std::string & parameters_filename) override;
+  virtual void process_parameters_file (const std::string & parameters_filename);
+
+  /**
+   * Set the state of this RBConstruction object based on the arguments
+   * to this function.
+   */
+  void set_rb_construction_parameters(unsigned int n_training_samples_in,
+                                      bool deterministic_training_in,
+                                      unsigned int training_parameters_random_seed_in,
+                                      bool quiet_mode_in,
+                                      unsigned int Nmax_in,
+                                      Real rel_training_tolerance_in,
+                                      Real abs_training_tolerance_in,
+                                      RBParameters mu_min_in,
+                                      RBParameters mu_max_in,
+                                      std::map<std::string, std::vector<Real>> discrete_parameter_values_in,
+                                      std::map<std::string,bool> log_scaling);
 
   /**
    * Specify which type of "best fit" we use to guide the EIM
@@ -99,12 +115,12 @@ public:
   /**
    * Print out info that describes the current setup of this RBConstruction.
    */
-  virtual void print_info() override;
+  virtual void print_info();
 
   /**
    * Generate the EIM approximation for the specified parametrized function.
    */
-  Real train_eim_approximation();
+  void train_eim_approximation();
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis
@@ -130,7 +146,7 @@ public:
   /**
    * Pre-request FE data needed for calculations.
    */
-  virtual void init_context(FEMContext &) override;
+  virtual void init_context(FEMContext &);
 
   /**
    * Fill up values by evaluating the parametrized function \p pf for all quadrature
@@ -147,10 +163,30 @@ public:
    * quadrature point.
    */
   static Number get_parametrized_function_value(
+    const Parallel::Communicator & comm,
     const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
     dof_id_type elem_id,
     unsigned int comp,
     unsigned int qp);
+
+  /**
+   * Get/set the relative tolerance for the basis training.
+   */
+  void set_rel_training_tolerance(Real new_training_tolerance);
+  Real get_rel_training_tolerance();
+
+  /**
+   * Get/set the absolute tolerance for the basis training.
+   */
+  void set_abs_training_tolerance(Real new_training_tolerance);
+  Real get_abs_training_tolerance();
+
+  /**
+   * Get/set Nmax, the maximum number of RB
+   * functions we are willing to compute.
+   */
+  unsigned int get_Nmax() const;
+  virtual void set_Nmax(unsigned int Nmax);
 
   /**
    * Enum that indicates which type of "best fit" algorithm
@@ -168,6 +204,13 @@ private:
    * the training sample index at which it occured.
    */
   std::pair<Real, unsigned int> compute_max_eim_error();
+
+  /**
+   * Compute the maximum (i.e. l-infinity norm) error of the best fit
+   * of the parametrized function at training index \p training_index
+   * into the EIM approximation space.
+   */
+  Real compute_best_fit_error(unsigned int training_index);
 
   /**
    * Compute and store the parametrized function for each
@@ -200,12 +243,12 @@ private:
   /**
    * Add a new basis function to the EIM approximation.
    */
-  virtual void enrich_eim_approximation();
+  void enrich_eim_approximation(unsigned int training_index);
 
   /**
    * Update the matrices used in training the EIM approximation.
    */
-  virtual void update_eim_matrices();
+  void update_eim_matrices();
 
   /**
    * We compute the best fit of parametrized_function
@@ -222,6 +265,17 @@ private:
   static void scale_parametrized_function(
     std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & local_pf,
     Number scaling_factor);
+
+  /**
+   * Maximum number of EIM basis functions we are willing to use.
+   */
+  unsigned int _Nmax;
+
+  /**
+   * Relative and absolute tolerances for training the EIM approximation.
+   */
+  Real _rel_training_tolerance;
+  Real _abs_training_tolerance;
 
   /**
    * The matrix we use in order to perform L2 projections of
@@ -261,12 +315,13 @@ private:
    * The indexing is as follows:
    *   element ID --> quadrature point --> xyz
    *   element ID --> quadrature point --> JxW
+   *   element ID --> subdomain_id
    * We use a map to index the element ID, since the IDs on this processor in
    * generally will not start at zero.
    */
-  std::unordered_map<dof_id_type, std::vector<Point>> > _local_quad_point_locations;
-  std::unordered_map<dof_id_type, std::vector<Real>> > _local_quad_point_JxW;
-  std::unordered_map<dof_id_type, std::vector<Real>> > _local_quad_point_subdomain_ids;
+  std::unordered_map<dof_id_type, std::vector<Point> > _local_quad_point_locations;
+  std::unordered_map<dof_id_type, std::vector<Real> > _local_quad_point_JxW;
+  std::unordered_map<dof_id_type, subdomain_id_type > _local_quad_point_subdomain_ids;
 
 };
 

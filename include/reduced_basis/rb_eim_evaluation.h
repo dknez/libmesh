@@ -78,7 +78,7 @@ public:
   /**
    * Get a const reference to the parametrized function.
    */
-  const RBParametrizedFunction & get_parametrized_function() const;
+  RBParametrizedFunction & get_parametrized_function();
 
   /**
    * Calculate the EIM approximation to parametrized_function

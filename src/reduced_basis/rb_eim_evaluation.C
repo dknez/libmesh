@@ -71,7 +71,7 @@ void RBEIMEvaluation::set_parametrized_function(std::unique_ptr<RBParametrizedFu
   _parametrized_function = std::move(pf):
 }
 
-const RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function() const
+RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function()
 {
   if(!_parametrized_function)
     libmesh_error_msg("Parametrized function not initialized yet");
@@ -168,11 +168,26 @@ void RBEIMEvaluation::decrement_vector(std::unordered_map<dof_id_type, std::vect
   if(get_n_basis_functions() != coeffs.size())
     libmesh_error_msg("Error: Number of coefficients should match number of basis functions");
 
-  for (unsigned int i : index_range(_local_eim_basis_functions))
-    for (const auto & [elem_id, v_var_and_qp] : v)
-      for (const auto & var : index_range(v_var_and_qp))
-        for (unsigned int qp : index_range(v_var_and_qp[var]))
-          v[elem_id][var][qp] -= get_rb_eim_solution()(i) * _local_eim_basis_functions[i][elem_id][var][qp];
+  for (const auto & [elem_id, v_comp_and_qp] : v)
+    for (const auto & comp : index_range(v_comp_and_qp))
+      for (unsigned int qp : index_range(v_comp_and_qp[comp]))
+        for (unsigned int i : index_range(_local_eim_basis_functions))
+          {
+            // Check that entry (elem_id,comp,qp) exists in _local_eim_basis_functions so that
+            // we get a clear error message if there is any missing data
+            auto basis_it = _local_eim_basis_functions[i].find(elem_id);
+            if (basis_it == _local_eim_basis_functions[i].end())
+              libmesh_error_msg("Error: Missing elem_id");
+
+            const auto & basis_comp_and_qp = basis_it->second;
+            if(comp >= basis_comp_and_qp.size())
+              libmesh_error_msg("Error: Invalid comp");
+            if(qp >= basis_comp_and_qp[comp].size())
+              libmesh_error_msg("Error: Invalid qp");
+
+            v[elem_id][var][qp] -= get_rb_eim_solution()(i) * basis_comp_and_qp[comp][qp];
+          }
+
 }
 
 void RBEIMEvaluation::initialize_eim_theta_objects()
@@ -222,6 +237,7 @@ Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function
   }
 
   return RBEIMConstruction::get_parametrized_function_value(
+    comm(),
     _local_eim_basis_functions[basis_function_index],
     elem_id,
     comp,
