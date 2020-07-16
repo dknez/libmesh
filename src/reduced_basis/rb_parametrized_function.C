@@ -18,6 +18,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "libmesh/rb_parametrized_function.h"
+#include "libmesh/int_range.h"
+#include "libmesh/point.h"
 
 namespace libMesh
 {
@@ -26,7 +28,7 @@ RBParametrizedFunction::~RBParametrizedFunction() {}
 
 void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
                                                  const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
-                                                 std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids,
+                                                 const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
                                                  std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & output)
 {
   output.clear();
@@ -56,7 +58,7 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
 
 void RBParametrizedFunction::preevaluate_parametrized_function(const RBParameters & mu,
                                                                const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
-                                                               std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids)
+                                                               const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids)
 {
   vectorized_evaluate(mu, all_xyz, sbd_ids, preevaluated_values);
 }
