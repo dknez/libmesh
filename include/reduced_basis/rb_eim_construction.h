@@ -44,7 +44,7 @@ namespace libMesh
  * used to create an affine approximation to non-affine operators,
  * so that the standard RB method can be applied in that case.
  */
-class RBEIMConstruction : public RBConstructionBase<LinearImplicitSystem>
+class RBEIMConstruction : public RBConstructionBase<System>
 {
 public:
 
@@ -140,6 +140,33 @@ public:
    * Pre-request FE data needed for calculations.
    */
   virtual void init_context(FEMContext &) override;
+
+  /**
+   * Fill up values by evaluating the parametrized function \p pf for all quadrature
+   * points on element \p elem_id and component \p comp.
+   */
+  static void get_parametrized_function_values_at_qps(
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+    dof_id_type elem_id,
+    unsigned int comp,
+    std::vector<Number> & values);
+
+  /**
+   * Same as above, except that we just return the value at the qp^th
+   * quadrature point.
+   */
+  static Number get_parametrized_function_value(
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+    dof_id_type elem_id,
+    unsigned int comp,
+    unsigned int qp);
+
+  /**
+   * Scale all values in \p pf by \p scaling_factor
+   */
+  static void scale_parametrized_function(
+    std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & local_pf,
+    Number scaling_factor);
 
   /**
    * Enum that indicates which type of "best fit" algorithm

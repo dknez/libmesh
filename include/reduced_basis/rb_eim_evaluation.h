@@ -42,7 +42,7 @@ class RBTheta;
  * approximation. RBEvaluation plays an analogous role in the context of
  * the regular reduced basis method.
  */
-class RBEIMEvaluation
+class RBEIMEvaluation : public RBParametrized
 {
 public:
 
@@ -186,6 +186,17 @@ public:
   const DenseMatrix<Number> & get_interpolation_matrix() const;
 
   /**
+   * Add \p bf to our EIM basis.
+   */
+  void add_basis_function_and_interpolation_data(
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & bf,
+    Point p,
+    unsigned int comp,
+    dof_id_type elem_id,
+    subdomain_id_type subdomain_id,
+    unsigned int qp);
+
+  /**
    * Boolean to indicate whether we evaluate a posteriori error bounds
    * when eim_solve is called.
    */
@@ -218,6 +229,7 @@ private:
    * We also store the element ID and qp index of each interpolation
    * point so that we can evaluate our basis functions at these
    * points by simply looking up the appropriate stored values.
+   * This data is only needed during the EIM training.
    */
   std::vector<dof_id_type> _interpolation_points_elem_id;
   std::vector<unsigned int> _interpolation_points_qp;
