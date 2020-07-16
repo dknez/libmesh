@@ -107,15 +107,6 @@ public:
   Real train_eim_approximation();
 
   /**
-   * We compute the best fit of parametrized_function
-   * into the EIM space and then evaluate the error
-   * in the norm defined by inner_product_matrix.
-   *
-   * \returns The error in the best fit
-   */
-  Real compute_best_fit_error();
-
-  /**
    * Build a vector of ElemAssembly objects that accesses the basis
    * functions stored in this RBEIMConstruction object. This is useful
    * for performing the Offline stage of the Reduced Basis method where
@@ -162,13 +153,6 @@ public:
     unsigned int qp);
 
   /**
-   * Scale all values in \p pf by \p scaling_factor
-   */
-  static void scale_parametrized_function(
-    std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & local_pf,
-    Number scaling_factor);
-
-  /**
    * Enum that indicates which type of "best fit" algorithm
    * we should use.
    * a) projection: Find the best fit in the inner product
@@ -177,6 +161,13 @@ public:
   BEST_FIT_TYPE best_fit_type_flag;
 
 private:
+
+  /**
+   * Find the training sample that has the largest EIM approximation error
+   * based on the current EIM approximation. Return the maximum error, and
+   * the training sample index at which it occured.
+   */
+  std::pair<Real, unsigned int> compute_max_eim_error();
 
   /**
    * Compute and store the parametrized function for each
@@ -215,6 +206,22 @@ private:
    * Update the matrices used in training the EIM approximation.
    */
   virtual void update_eim_matrices();
+
+  /**
+   * We compute the best fit of parametrized_function
+   * into the EIM space and then evaluate the error
+   * in the norm defined by inner_product_matrix.
+   *
+   * \returns The error in the best fit
+   */
+  Real compute_best_fit_error();
+
+  /**
+   * Scale all values in \p pf by \p scaling_factor
+   */
+  static void scale_parametrized_function(
+    std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & local_pf,
+    Number scaling_factor);
 
   /**
    * The matrix we use in order to perform L2 projections of
