@@ -63,14 +63,49 @@ public:
                           subdomain_id_type subdomain_id) = 0;
 
   /**
-   * Pre-evaluate the parametrized function for the specified RBParameters
-   * at the specified points and subdomain_ids. The results from this
-   * preevaluation will be stored and then looked up in the subsequent
-   * evaluate operation.
+   * Vectorized version of evaluate.
+   */
+  virtual void vectorized_evaluate(const RBParameters & mu,
+                                   const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
+                                   std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids,
+                                   std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & output)
+  {
+    output.clear();
+
+    for (auto it : all_xyz)
+      {
+        dof_id_type elem_id = it.first;
+        const std::vector<Point> & xyz_vec = it.second;
+
+        auto sbd_it = sbd_ids.find(elem_id);
+        if (sbd_it == sbd_ids.end())
+          libmesh_error_msg("Error: elem_id not found");
+        subdomain_id_type subdomain_id = sbd_it->second;
+
+        std::vector<std::vector<Number>> values(get_n_components());
+        for (unsigned int comp=0; comp<get_n_components(); comp++)
+          {
+            values[comp].resize(xyz_vec.size());
+            for (unsigned int qp : index_range(xyz_vec))
+              {
+                values[comp][qp] = evaluate(mu, comp, xyz_vec[qp], subdomain_id);
+              }
+          }
+        output[elem_id] = values;
+      }
+  }
+
+  /**
+   * Store the result of vectorized_evaluate. This is helpful during EIM training,
+   * since we can pre-evaluate and store the parameterized function for each training
+   * sample.
    */
   virtual void preevaluate_parametrized_function(const RBParameters & mu,
-                                                 const std::unordered_map<dof_id_type, std::vector<Point>> & xyz,
-                                                 std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids) = 0;
+                                                 const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
+                                                 std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids)
+  {
+    vectorized_evaluate(mu, all_xyz, sbd_ids, preevaluated_values);
+  }
 
   /**
    * Look up the preevaluate values of the parametrized function for
@@ -78,7 +113,28 @@ public:
    */
   virtual Number lookup_preevaluated_value(unsigned int comp,
                                            dof_id_type elem_id,
-                                           unsigned int qp) = 0;
+                                           unsigned int qp) const
+  {
+    const auto elem_it = preevaluated_values.find(elem_id);
+    if (elem_it == preevaluated_values.end())
+      libmesh_error_msg("Error: elem_id not found");
+
+    const std::vector<std::vector<Number>> & values = elem_it->second;
+
+    if (comp >= values.size())
+      libmesh_error_msg("Error: invalid comp");
+
+    if (qp >= values[comp].size())
+      libmesh_error_msg("Error: invalid qp");
+
+    return values[comp][qp];
+  }
+
+  /**
+   * Storage for pre-evaluated values. The indexing here is:
+   *   elem_id --> comp --> qp --> value
+   */
+  std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> preevaluated_values;
 };
 
 }
