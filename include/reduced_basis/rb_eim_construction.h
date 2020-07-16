@@ -149,27 +149,6 @@ public:
   virtual void init_context(FEMContext &);
 
   /**
-   * Fill up values by evaluating the parametrized function \p pf for all quadrature
-   * points on element \p elem_id and component \p comp.
-   */
-  static void get_parametrized_function_values_at_qps(
-    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
-    dof_id_type elem_id,
-    unsigned int comp,
-    std::vector<Number> & values);
-
-  /**
-   * Same as above, except that we just return the value at the qp^th
-   * quadrature point.
-   */
-  static Number get_parametrized_function_value(
-    const Parallel::Communicator & comm,
-    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
-    dof_id_type elem_id,
-    unsigned int comp,
-    unsigned int qp);
-
-  /**
    * Get/set the relative tolerance for the basis training.
    */
   void set_rel_training_tolerance(Real new_training_tolerance);

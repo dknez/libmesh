@@ -22,12 +22,15 @@
 
 // libMesh includes
 #include "libmesh/point.h"
-#include "libmesh/rb_evaluation.h"
-#include "libmesh/replicated_mesh.h"
 #include "libmesh/rb_theta_expansion.h"
+#include "libmesh/rb_parametrized.h"
+#include "libmesh/parallel_object.h"
+#include "libmesh/dense_matrix.h"
+#include "libmesh/dense_vector.h"
 
 // C++ includes
 #include <memory>
+#include <unordered_map>
 
 namespace libMesh
 {
@@ -130,6 +133,28 @@ public:
    * override in subclasses if we need more specialized behavior.
    */
   virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
+
+  /**
+   * Fill up values by evaluating the parametrized function \p pf for all quadrature
+   * points on element \p elem_id and component \p comp.
+   */
+  static void get_parametrized_function_values_at_qps(
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+    dof_id_type elem_id,
+    unsigned int comp,
+    std::vector<Number> & values);
+
+  /**
+   * Same as above, except that we just return the value at the qp^th
+   * quadrature point.
+   */
+  static Number get_parametrized_function_value(
+    const Parallel::Communicator & comm,
+    const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+    dof_id_type elem_id,
+    unsigned int comp,
+    unsigned int qp);
+
 
   /**
    * Fill up \p values with the basis function values for basis function

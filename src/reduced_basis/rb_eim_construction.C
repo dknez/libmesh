@@ -388,53 +388,6 @@ void RBEIMConstruction::init_context(FEMContext & c)
       }
 }
 
-void RBEIMConstruction::get_parametrized_function_values_at_qps(
-  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
-  dof_id_type elem_id,
-  unsigned int comp,
-  std::vector<Number> & values)
-{
-  LOG_SCOPE("get_parametrized_function_values_at_qps()", "RBEIMConstruction");
-
-  values.clear();
-
-  const auto it = pf.find(elem_id);
-  if(it != pf.end())
-  {
-    const auto & comps_and_qps_on_elem = it->second;
-    if(comp >= comps_and_qps_on_elem.size())
-    {
-      libmesh_error_msg("Invalid comp index: " + std::to_string(comp));
-    }
-
-    values = comps_and_qps_on_elem[comp];
-  }
-}
-
-Number RBEIMConstruction::get_parametrized_function_value(
-  const Parallel::Communicator & comm,
-  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
-  dof_id_type elem_id,
-  unsigned int comp,
-  unsigned int qp)
-{
-  std::vector<Number> values;
-  get_parametrized_function_values_at_qps(pf, elem_id, comp, values);
-
-  // In parallel, values should only be non-empty on one processor
-  Number value = 0.;
-  if(!values.empty())
-  {
-    if(qp >= values.size())
-      libmesh_error_msg("Error: Invalid qp index");
-
-    value = values[qp];
-  }
-  comm.sum(value);
-
-  return value;
-}
-
 void RBEIMConstruction::set_rel_training_tolerance(Real new_training_tolerance)
 {
   _rel_training_tolerance = new_training_tolerance;
@@ -536,7 +489,7 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
             for (unsigned int qp : index_range(xyz_vector))
               {
                 comps_and_qps[comp][qp] =
-                  eim_eval.get_parametrized_function().evaluate(comp, elem_id, qp);
+                  eim_eval.get_parametrized_function().lookup_preevaluated_value(comp, elem_id, qp);
               }
           }
 
@@ -663,11 +616,11 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
       for (unsigned int i=0; i<RB_size; i++)
         {
           EIM_rhs(i) =
-            get_parametrized_function_value(comm(),
-                                            local_pf,
-                                            eim_eval.get_interpolation_points_elem_id(i),
-                                            eim_eval.get_interpolation_points_comp(i),
-                                            eim_eval.get_interpolation_points_qp(i));
+            RBEIMEvaluation::get_parametrized_function_value(comm(),
+                                                             local_pf,
+                                                             eim_eval.get_interpolation_points_elem_id(i),
+                                                             eim_eval.get_interpolation_points_comp(i),
+                                                             eim_eval.get_interpolation_points_qp(i));
         }
 
       eim_eval.set_parameters( get_parameters() );

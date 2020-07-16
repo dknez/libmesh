@@ -54,22 +54,31 @@ public:
   virtual unsigned int get_n_components() const = 0;
 
   /**
+   * Evaluate the parametrized function at the specified point for
+   * parameter \p mu.
+   */
+  virtual Number evaluate(const RBParameters & mu,
+                          unsigned int comp,
+                          Point xyz,
+                          subdomain_id_type subdomain_id) = 0;
+
+  /**
    * Pre-evaluate the parametrized function for the specified RBParameters
    * at the specified points and subdomain_ids. The results from this
    * preevaluation will be stored and then looked up in the subsequent
    * evaluate operation.
    */
-  virtual void preevaluate_parametrized_function(const RBParameters & /*mu*/,
-                                                 const std::unordered_map<dof_id_type, std::vector<Point>> & /*xyz*/,
-                                                 std::unordered_map<dof_id_type, subdomain_id_type> /*sbd_ids*/) = 0;
+  virtual void preevaluate_parametrized_function(const RBParameters & mu,
+                                                 const std::unordered_map<dof_id_type, std::vector<Point>> & xyz,
+                                                 std::unordered_map<dof_id_type, subdomain_id_type> sbd_ids) = 0;
 
   /**
    * Look up the preevaluate values of the parametrized function for
    * component \p comp, element \p elem_id, and quadrature point \p qp.
    */
-  virtual Number evaluate(unsigned int /*comp*/,
-                          dof_id_type /*elem_id*/,
-                          unsigned int /*qp*/) = 0;
+  virtual Number lookup_preevaluated_value(unsigned int comp,
+                                           dof_id_type elem_id,
+                                           unsigned int qp) = 0;
 };
 
 }
