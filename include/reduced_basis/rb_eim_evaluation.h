@@ -42,14 +42,15 @@ class RBTheta;
  * approximation. RBEvaluation plays an analogous role in the context of
  * the regular reduced basis method.
  */
-class RBEIMEvaluation : public RBParametrized
+class RBEIMEvaluation : public RBParametrized,
+                        public ParallelObject
 {
 public:
 
   /**
    * Constructor.
    */
-  RBEIMEvaluation();
+  RBEIMEvaluation(const Parallel::Communicator & comm);
 
   /**
    * Destructor.
@@ -98,6 +99,12 @@ public:
    * Return the current number of EIM basis functions.
    */
   unsigned int get_n_basis_functions() const;
+
+  /**
+   * Set the number of basis functions. Useful when reading in
+   * stored data.
+   */
+  void set_n_basis_functions(unsigned int n_bfs);
 
   /**
    * Subtract coeffs[i]*basis_function[i] from \p v.
@@ -160,16 +167,16 @@ public:
   /**
    * Set the data associated with EIM interpolation points.
    */
-  void set_interpolation_points_xyz(Point p);
-  void set_interpolation_points_comp(unsigned int comp);
-  void set_interpolation_points_subdomain_id(subdomain_id_type sbd_id);
-  void set_interpolation_points_elem_id(dof_id_type elem_id);
-  void set_interpolation_points_qp(unsigned int qp);
+  void add_interpolation_points_xyz(Point p);
+  void add_interpolation_points_comp(unsigned int comp);
+  void add_interpolation_points_subdomain_id(subdomain_id_type sbd_id);
+  void add_interpolation_points_elem_id(dof_id_type elem_id);
+  void add_interpolation_points_qp(unsigned int qp);
 
   /**
    * Get the data associated with EIM interpolation points.
    */
-  Point get_interpolation_points_xyz() const;
+  Point get_interpolation_points_xyz(unsigned int index) const;
   unsigned int get_interpolation_points_comp(unsigned int index) const;
   subdomain_id_type get_interpolation_points_subdomain_id(unsigned int index) const;
   dof_id_type get_interpolation_points_elem_id(unsigned int index) const;

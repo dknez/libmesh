@@ -36,8 +36,9 @@
 namespace libMesh
 {
 
-RBEIMEvaluation::RBEIMEvaluation()
+RBEIMEvaluation::RBEIMEvaluation(const Parallel::Communicator & comm)
 :
+ParallelObject(comm),
 evaluate_eim_error_bound(true)
 {
 }
@@ -154,6 +155,11 @@ void RBEIMEvaluation::rb_eim_solve(DenseVector<Number> & EIM_rhs)
 unsigned int RBEIMEvaluation::get_n_basis_functions() const
 {
   return _local_eim_basis_functions.size();
+}
+
+void RBEIMEvaluation::set_n_basis_functions(unsigned int n_bfs)
+{
+  _local_eim_basis_functions.resize(n_bfs);
 }
 
 void RBEIMEvaluation::decrement_vector(std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
