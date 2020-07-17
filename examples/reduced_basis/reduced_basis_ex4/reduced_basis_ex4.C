@@ -78,8 +78,10 @@ int main (int argc, char ** argv)
   // Skip this 2D example if libMesh was compiled as 1D-only.
   libmesh_example_requires(2 <= LIBMESH_DIM, "2D support");
 
-#ifndef LIBMESH_ENABLE_DIRICHLET
-  libmesh_example_requires(false, "--enable-dirichlet");
+  // This example requires libmesh to be configured with both
+  // DirichletBoundary and Cap'n Proto support.
+#if !defined(LIBMESH_ENABLE_DIRICHLET) || !defined(LIBMESH_HAVE_CAPNPROTO)
+  libmesh_example_requires(false, "--enable-dirichlet --enable-capnp");
 #else
 
   // Define the names of the input files we will read the problem properties from
