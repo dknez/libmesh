@@ -434,6 +434,8 @@ write_out_basis_functions(const std::string & directory_name,
   libMesh::out << "Writing to directory: " << directory_name << std::endl;
   libMesh::out << "write_binary_basis_functions = " << write_binary_basis_functions << std::endl;
   libMesh::out << "_local_eim_basis_functions.size()=" << _local_eim_basis_functions.size() << std::endl;
+
+  // Debugging: Print values to screen
   // for (auto bf : index_range(_local_eim_basis_functions))
   //   {
   //     libMesh::out << "Basis function " << bf << std::endl;
@@ -540,8 +542,21 @@ write_out_basis_functions(const std::string & directory_name,
           // Write all the var values for this bf
           for (auto var : index_range(qp_data))
             {
-              std::string comment = "# Basis function " + std::to_string(bf) + ", variable " + std::to_string(var);
-              xdr.data(qp_data[var], comment.c_str());
+              // Debugging: print qp_data[var]
+              // libMesh::out << "Basis function " << bf << ", variable " << var << ": " << std::endl;
+              // for (const auto & val : qp_data[var])
+              //   libMesh::out << val << " ";
+              // libMesh::out << std::endl;
+
+              // Write by calling data()
+              // std::string comment = "# Basis function " + std::to_string(bf) + ", variable " + std::to_string(var);
+              // xdr.data(qp_data[var], comment.c_str());
+
+              // Write by calling data_stream(). I found that using an
+              // arbitrary line break does not work correctly, it
+              // seems to access uninitialized memory past the end of
+              // the vector if it is not a multiple of the array size?
+              xdr.data_stream(qp_data[var].data(), qp_data[var].size(), /*line_break=*/qp_data[var].size());
             }
         }
     }
