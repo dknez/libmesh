@@ -430,6 +430,10 @@ write_out_basis_functions(const std::string & directory_name,
         }
     }
 
+  // Quick return if there is no work to do
+  if (_local_eim_basis_functions.empty())
+    return;
+
   // Write values from processor 0 only.
   if (this->processor_id() == 0)
     {
@@ -442,13 +446,18 @@ write_out_basis_functions(const std::string & directory_name,
       file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
 
       // Create XDR writer object
-      Xdr bf_data(file_name.str(), write_binary_basis_functions ? ENCODE : WRITE);
+      Xdr xdr(file_name.str(), write_binary_basis_functions ? ENCODE : WRITE);
 
-      // Write data to file. Note: the Xdr::data() function takes
-      // non-const references, so you can't pass e.g. vec.size() to
-      // that interface.
+      // Write number of basis functions to file. Note: the
+      // Xdr::data() function takes non-const references, so you can't
+      // pass e.g. vec.size() to that interface.
       auto n_bf = _local_eim_basis_functions.size();
-      bf_data.data(n_bf, "# Number of basis functions");
+      xdr.data(n_bf, "# Number of basis functions");
+
+      // We assume that each basis function has data for the same
+      // number of elements, which is equal to the size of the map.
+      auto n_elem = _local_eim_basis_functions[0].size();
+      xdr.data(n_elem, "# Number of elements");
     }
 }
 
