@@ -41,45 +41,46 @@ using libMesh::Real;
 using libMesh::RealGradient;
 using libMesh::Elem;
 using libMesh::FEBase;
+using libMesh::subdomain_id_type;
 
 struct ElemAssemblyWithConstruction : ElemAssembly
 {
   RBConstruction * rb_con;
 };
 
-// The "x component" of the function we're approximating with EIM
-struct Gx : public RBParametrizedFunction
+// The function we're approximating with EIM
+struct Gxyz : public RBParametrizedFunction
 {
-  virtual Number evaluate(const RBParameters & mu,
-                          const Point & p,
-                          const Elem &)
+  unsigned int get_n_components() const
   {
-    Real curvature = mu.get_value("curvature");
-    return 1. + curvature*p(0);
+    return 3;
   }
-};
 
-// The "y component" of the function we're approximating with EIM
-struct Gy : public RBParametrizedFunction
-{
   virtual Number evaluate(const RBParameters & mu,
+                          unsigned int comp,
                           const Point & p,
-                          const Elem &)
+                          subdomain_id_type /*subdomain_id*/)
   {
     Real curvature = mu.get_value("curvature");
-    return 1. + curvature*p(0);
-  }
-};
 
-// The "z component" of the function we're approximating with EIM
-struct Gz : public RBParametrizedFunction
-{
-  virtual Number evaluate(const RBParameters & mu,
-                          const Point & p,
-                          const Elem &)
-  {
-    Real curvature = mu.get_value("curvature");
-    return 1./(1. + curvature*p(0));
+    if(comp == 0)
+    {
+      return 1. + curvature*p(0);
+    }
+    else if(comp == 1)
+    {
+      return 1. + curvature*p(0);
+    }
+    else if(comp == 2)
+    {
+      return 1./(1. + curvature*p(0));
+    }
+    else
+    {
+      libmesh_error_msg("Error: Invalid comp");
+    }
+
+    return 0.;
   }
 };
 
