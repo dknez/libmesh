@@ -49,6 +49,16 @@ public:
   }
 
   /**
+   * Initialize data structures.
+   */
+  virtual void init_data()
+  {
+    this->add_variable ("eim_var", libMesh::FIRST);
+
+    RBEIMConstruction::init_data();
+  }
+
+  /**
    * Provide an implementation of build_eim_assembly
    */
   virtual std::unique_ptr<ElemAssembly> build_eim_assembly(unsigned int index)
