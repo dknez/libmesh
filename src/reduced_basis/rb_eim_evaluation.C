@@ -455,9 +455,30 @@ write_out_basis_functions(const std::string & directory_name,
       xdr.data(n_bf, "# Number of basis functions");
 
       // We assume that each basis function has data for the same
-      // number of elements, which is equal to the size of the map.
+      // number of elements as basis function 0, which is equal to the
+      // size of the map.
       auto n_elem = _local_eim_basis_functions[0].size();
       xdr.data(n_elem, "# Number of elements");
+
+      // We assume that each element has the same number of variables,
+      // and we get the number of vars from the first element of the
+      // first basis function.
+      auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
+      xdr.data(n_vars, "# Number of variables");
+
+      // We assume that the list of elements for each basis function
+      // is the same as basis function 0. We also assume that all vars
+      // have the same number of qps.
+      std::vector<unsigned int> n_qp_per_elem;
+      n_qp_per_elem.reserve(n_elem);
+      for (const auto & pr : _local_eim_basis_functions[0])
+        {
+          // array[n_vars][n_qp] per Elem. We get the number of QPs
+          // for variable 0, assuming they are all the same.
+          const auto & array = pr.second;
+          n_qp_per_elem.push_back(array[0].size());
+        }
+      xdr.data(n_qp_per_elem, "# Number of QPs per Elem");
     }
 }
 
