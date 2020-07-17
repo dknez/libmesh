@@ -146,10 +146,8 @@ int main (int argc, char ** argv)
       eim_construction.initialize_eim_construction();
       eim_construction.train_eim_approximation();
 
-#if defined(LIBMESH_HAVE_CAPNPROTO)
       RBDataSerialization::RBEIMEvaluationSerialization rb_eim_eval_writer(eim_rb_eval);
       rb_eim_eval_writer.write_to_file("rb_eim_eval.bin");
-#endif
 
       // Read data from input file and print state
       rb_construction.process_parameters_file(rb_parameters);
@@ -170,10 +168,8 @@ int main (int argc, char ** argv)
       rb_construction.initialize_rb_construction();
       rb_construction.train_reduced_basis();
 
-#if defined(LIBMESH_HAVE_CAPNPROTO)
       RBDataSerialization::RBEvaluationSerialization rb_eval_writer(rb_construction.get_rb_evaluation());
       rb_eval_writer.write_to_file("rb_eval.bin");
-#endif
 
       // Write out the basis functions, if requested
       if (store_basis_functions)
@@ -188,20 +184,16 @@ int main (int argc, char ** argv)
     }
   else
     {
-#if defined(LIBMESH_HAVE_CAPNPROTO)
       RBDataDeserialization::RBEIMEvaluationDeserialization rb_eim_eval_reader(eim_rb_eval);
       rb_eim_eval_reader.read_from_file("rb_eim_eval.bin");
-#endif
 
       // attach the EIM theta objects to rb_eval objects
       eim_rb_eval.initialize_eim_theta_objects();
       rb_eval.get_rb_theta_expansion().attach_multiple_F_theta(eim_rb_eval.get_eim_theta_objects());
 
       // Read in the offline data for rb_eval
-#if defined(LIBMESH_HAVE_CAPNPROTO)
       RBDataDeserialization::RBEvaluationDeserialization rb_eval_reader(rb_eval);
       rb_eval_reader.read_from_file("rb_eval.bin", /*read_error_bound_data*/ true);
-#endif
 
       // Get the parameters at which we will do a reduced basis solve
       Real online_center_x = infile("online_center_x", 0.);
