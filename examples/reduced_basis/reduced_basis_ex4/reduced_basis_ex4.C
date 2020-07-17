@@ -175,7 +175,7 @@ int main (int argc, char ** argv)
       if (store_basis_functions)
         {
           // TODO: This needs to be implemented in the new version of RBEIMEvaluation
-          eim_rb_eval.write_out_basis_functions("eim_data");
+          eim_rb_eval.write_out_basis_functions("eim_data", /*binary=*/false);
 
           rb_construction.get_rb_evaluation().write_out_basis_functions(rb_construction,
                                                                         "rb_data");
