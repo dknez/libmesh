@@ -25,6 +25,7 @@
 #include "libmesh/rb_eim_evaluation.h"
 #include "libmesh/rb_eim_theta.h"
 #include "libmesh/rb_parametrized_function.h"
+#include "libmesh/utility.h" // Utility::mkdir
 
 // libMesh includes
 #include "libmesh/xdr_cxx.h"
@@ -427,6 +428,27 @@ write_out_basis_functions(const std::string & directory_name,
               libMesh::out << std::endl;
             }
         }
+    }
+
+  // Write values from processor 0 only.
+  if (this->processor_id() == 0)
+    {
+      // Make a directory to store all the data files
+      Utility::mkdir(directory_name.c_str());
+
+      // Create filename
+      std::ostringstream file_name;
+      const std::string basis_function_suffix = (write_binary_basis_functions ? ".xdr" : ".dat");
+      file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
+
+      // Create XDR writer object
+      Xdr bf_data(file_name.str(), write_binary_basis_functions ? ENCODE : WRITE);
+
+      // Write data to file. Note: the Xdr::data() function takes
+      // non-const references, so you can't pass e.g. vec.size() to
+      // that interface.
+      auto n_bf = _local_eim_basis_functions.size();
+      bf_data.data(n_bf, "# Number of basis functions");
     }
 }
 
