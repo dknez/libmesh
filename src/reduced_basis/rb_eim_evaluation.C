@@ -17,10 +17,6 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-// C++ includes
-#include <sstream>
-#include <fstream>
-
 // rbOOmit includes
 #include "libmesh/rb_eim_evaluation.h"
 #include "libmesh/rb_eim_theta.h"
@@ -33,6 +29,11 @@
 #include "libmesh/replicated_mesh.h"
 #include "libmesh/elem.h"
 #include "timpi/parallel_implementation.h"
+
+// C++ includes
+#include <sstream>
+#include <fstream>
+#include <numeric> // std::accumulate
 
 namespace libMesh
 {
@@ -413,22 +414,22 @@ write_out_basis_functions(const std::string & directory_name,
   libMesh::out << "Writing to directory: " << directory_name << std::endl;
   libMesh::out << "write_binary_basis_functions = " << write_binary_basis_functions << std::endl;
   libMesh::out << "_local_eim_basis_functions.size()=" << _local_eim_basis_functions.size() << std::endl;
-  for (auto bf : index_range(_local_eim_basis_functions))
-    {
-      libMesh::out << "Basis function " << bf << std::endl;
-      for (const auto & pr : _local_eim_basis_functions[bf])
-        {
-          libMesh::out << "Elem " << pr.first << std::endl;
-          const auto & array = pr.second;
-          for (auto var : index_range(array))
-            {
-              libMesh::out << "Variable " << var << std::endl;
-              for (auto qp : index_range(array[var]))
-                libMesh::out << array[var][qp] << " ";
-              libMesh::out << std::endl;
-            }
-        }
-    }
+  // for (auto bf : index_range(_local_eim_basis_functions))
+  //   {
+  //     libMesh::out << "Basis function " << bf << std::endl;
+  //     for (const auto & pr : _local_eim_basis_functions[bf])
+  //       {
+  //         libMesh::out << "Elem " << pr.first << std::endl;
+  //         const auto & array = pr.second;
+  //         for (auto var : index_range(array))
+  //           {
+  //             libMesh::out << "Variable " << var << std::endl;
+  //             for (auto qp : index_range(array[var]))
+  //               libMesh::out << array[var][qp] << " ";
+  //             libMesh::out << std::endl;
+  //           }
+  //       }
+  //   }
 
   // Quick return if there is no work to do
   if (_local_eim_basis_functions.empty())
@@ -479,6 +480,50 @@ write_out_basis_functions(const std::string & directory_name,
           n_qp_per_elem.push_back(array[0].size());
         }
       xdr.data(n_qp_per_elem, "# Number of QPs per Elem");
+
+      // The total amount of qp data for each var is the sum of the
+      // entries in the "n_qp_per_elem" array.
+      auto n_qp_data =
+        std::accumulate(n_qp_per_elem.begin(),
+                        n_qp_per_elem.end(),
+                        0,
+                        std::plus<unsigned int>());
+
+      // Reserve space to store continguous vectors of qp data for each var
+      std::vector<std::vector<Real>> qp_data(n_vars);
+      for (auto var : index_range(qp_data))
+        qp_data[var].reserve(n_qp_data);
+
+      // Now we construct a vector for each basis function, for each
+      // variable which is ordered according to:
+      // [ [qp vals for Elem 0], [qp vals for Elem 1], ... [qp vals for Elem N] ]
+      // and write it to file.
+      for (auto bf : index_range(_local_eim_basis_functions))
+        {
+          // Clear any data from previous bf
+          for (auto var : index_range(qp_data))
+            qp_data[var].clear();
+
+          for (const auto & pr : _local_eim_basis_functions[bf])
+            {
+              // array[n_vars][n_qp] per Elem
+              const auto & array = pr.second;
+              for (auto var : index_range(array))
+                {
+                  // Insert all qp values for this var
+                  qp_data[var].insert(/*insert at*/qp_data[var].end(),
+                                      /*data start*/array[var].begin(),
+                                      /*data end*/array[var].end());
+                }
+            }
+
+          // Write all the var values for this bf
+          for (auto var : index_range(qp_data))
+            {
+              std::string comment = "# Basis function " + std::to_string(bf) + ", variable " + std::to_string(var);
+              xdr.data(qp_data[var], comment.c_str());
+            }
+        }
     }
 }
 
