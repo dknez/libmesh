@@ -175,7 +175,7 @@ void RBEIMEvaluation::decrement_vector(std::unordered_map<dof_id_type, std::vect
     {
       dof_id_type elem_id = v_it.first;
       const auto & v_comp_and_qp = v_it.second;
-      
+
       for (const auto & comp : index_range(v_comp_and_qp))
         for (unsigned int qp : index_range(v_comp_and_qp[comp]))
           for (unsigned int i : index_range(_local_eim_basis_functions))
@@ -405,10 +405,29 @@ void RBEIMEvaluation::add_basis_function_and_interpolation_data(
 }
 
 void RBEIMEvaluation::
-write_out_basis_functions(const std::string & /*directory_name*/,
-                          bool /*write_binary_basis_functions*/)
+write_out_basis_functions(const std::string & directory_name,
+                          bool write_binary_basis_functions)
 {
   libMesh::out << "Called RBEIMEvaluation::write_out_basis_functions()" << std::endl;
+  libMesh::out << "Writing to directory: " << directory_name << std::endl;
+  libMesh::out << "write_binary_basis_functions = " << write_binary_basis_functions << std::endl;
+  libMesh::out << "_local_eim_basis_functions.size()=" << _local_eim_basis_functions.size() << std::endl;
+  for (auto bf : index_range(_local_eim_basis_functions))
+    {
+      libMesh::out << "Basis function " << bf << std::endl;
+      for (const auto & pr : _local_eim_basis_functions[bf])
+        {
+          libMesh::out << "Elem " << pr.first << std::endl;
+          const auto & array = pr.second;
+          for (auto var : index_range(array))
+            {
+              libMesh::out << "Variable " << var << std::endl;
+              for (auto qp : index_range(array[var]))
+                libMesh::out << array[var][qp] << " ";
+              libMesh::out << std::endl;
+            }
+        }
+    }
 }
 
 } // namespace libMesh
