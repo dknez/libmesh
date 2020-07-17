@@ -43,9 +43,7 @@ evaluate_eim_error_bound(true)
 {
 }
 
-RBEIMEvaluation::~RBEIMEvaluation()
-{
-}
+RBEIMEvaluation::~RBEIMEvaluation() = default;
 
 void RBEIMEvaluation::clear()
 {
@@ -406,4 +404,11 @@ void RBEIMEvaluation::add_basis_function_and_interpolation_data(
   _interpolation_points_qp.emplace_back(qp);
 }
 
+void RBEIMEvaluation::
+write_out_basis_functions(const std::string & /*directory_name*/,
+                          bool /*write_binary_basis_functions*/)
+{
+  libMesh::out << "Called RBEIMEvaluation::write_out_basis_functions()" << std::endl;
 }
+
+} // namespace libMesh
