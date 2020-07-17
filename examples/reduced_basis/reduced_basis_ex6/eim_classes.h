@@ -25,8 +25,7 @@ public:
   SimpleEIMEvaluation(const libMesh::Parallel::Communicator & comm)
     : RBEIMEvaluation(comm)
   {
-    std::unique_ptr<RBParametrizedFunction> g = std::make_unique<Gxyz>();
-    set_parametrized_function(std::move(g));
+    set_parametrized_function(std::make_unique<Gxyz>());
   }
 
   /**
