@@ -172,7 +172,7 @@ void RBEIMEvaluation::set_n_basis_functions(unsigned int n_bfs)
   _local_eim_basis_functions.resize(n_bfs);
 }
 
-void RBEIMEvaluation::decrement_vector(std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & v,
+void RBEIMEvaluation::decrement_vector(QpDataMap & v,
                                        const DenseVector<Number> & coeffs)
 {
   if(get_n_basis_functions() != coeffs.size())
@@ -224,7 +224,7 @@ std::unique_ptr<RBTheta> RBEIMEvaluation::build_eim_theta(unsigned int index)
 }
 
 void RBEIMEvaluation::get_parametrized_function_values_at_qps(
-  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+  const QpDataMap & pf,
   dof_id_type elem_id,
   unsigned int comp,
   std::vector<Number> & values)
@@ -248,7 +248,7 @@ void RBEIMEvaluation::get_parametrized_function_values_at_qps(
 
 Number RBEIMEvaluation::get_parametrized_function_value(
   const Parallel::Communicator & comm,
-  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & pf,
+  const QpDataMap & pf,
   dof_id_type elem_id,
   unsigned int comp,
   unsigned int qp)
@@ -305,8 +305,8 @@ Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function
     qp);
 }
 
-const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> &
-  RBEIMEvaluation::get_basis_function(unsigned int i) const
+const RBEIMEvaluation::QpDataMap &
+RBEIMEvaluation::get_basis_function(unsigned int i) const
 {
   return _local_eim_basis_functions[i];
 }
@@ -409,7 +409,7 @@ const DenseMatrix<Number> & RBEIMEvaluation::get_interpolation_matrix() const
 }
 
 void RBEIMEvaluation::add_basis_function_and_interpolation_data(
-  const std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> & bf,
+  const QpDataMap & bf,
   Point p,
   unsigned int comp,
   dof_id_type elem_id,
@@ -488,6 +488,11 @@ write_out_basis_functions(const std::string & directory_name,
           // writing the Elem ids to the Xdr file, but if we need to
           // generalize this assumption later, we can.
           const auto & actual_elem_id = pr.first;
+
+          // Debugging:
+          libMesh::err << "actual_elem_id=" << actual_elem_id << std::endl;
+          libMesh::err << "expected_elem_id=" << expected_elem_id << std::endl;
+
           if (actual_elem_id != expected_elem_id++)
             libmesh_error_msg("RBEIMEvaluation currently assumes a contiguous Elem numbering starting from 0.");
 
