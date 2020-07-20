@@ -638,7 +638,7 @@ read_in_basis_functions(const std::string & directory_name,
           }
 
       // Allocate temporary storage for one var's worth of qp data.
-      std::vector<Real> qp_data;
+      std::vector<Number> qp_data;
 
       // Read in data for each basis function
       for (auto i : index_range(_local_eim_basis_functions))
