@@ -437,22 +437,7 @@ write_out_basis_functions(const std::string & directory_name,
   libMesh::out << "_local_eim_basis_functions.size()=" << _local_eim_basis_functions.size() << std::endl;
 
   // Debugging: Print values to screen
-  // for (auto bf : index_range(_local_eim_basis_functions))
-  //   {
-  //     libMesh::out << "Basis function " << bf << std::endl;
-  //     for (const auto & pr : _local_eim_basis_functions[bf])
-  //       {
-  //         libMesh::out << "Elem " << pr.first << std::endl;
-  //         const auto & array = pr.second;
-  //         for (auto var : index_range(array))
-  //           {
-  //             libMesh::out << "Variable " << var << std::endl;
-  //             for (auto qp : index_range(array[var]))
-  //               libMesh::out << array[var][qp] << " ";
-  //             libMesh::out << std::endl;
-  //           }
-  //       }
-  //   }
+  // this->print_local_eim_basis_functions();
 
   // Quick return if there is no work to do
   if (_local_eim_basis_functions.empty())
@@ -676,6 +661,30 @@ read_in_basis_functions(const std::string & directory_name,
                   array[var].assign(cursor, cursor + n_qp_per_elem[elem_id]);
                   std::advance(cursor, n_qp_per_elem[elem_id]);
                 }
+            }
+        }
+
+      // Debugging: check that the data was read in correctly.
+      this->print_local_eim_basis_functions();
+
+    } // end if processor 0
+}
+
+void RBEIMEvaluation::print_local_eim_basis_functions() const
+{
+  for (auto bf : index_range(_local_eim_basis_functions))
+    {
+      libMesh::out << "Basis function " << bf << std::endl;
+      for (const auto & pr : _local_eim_basis_functions[bf])
+        {
+          libMesh::out << "Elem " << pr.first << std::endl;
+          const auto & array = pr.second;
+          for (auto var : index_range(array))
+            {
+              libMesh::out << "Variable " << var << std::endl;
+              for (auto qp : index_range(array[var]))
+                libMesh::out << array[var][qp] << " ";
+              libMesh::out << std::endl;
             }
         }
     }

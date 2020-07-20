@@ -324,6 +324,11 @@ private:
    */
   std::vector<std::unordered_map<dof_id_type, std::vector<std::vector<Number>>> > _local_eim_basis_functions;
 
+  /**
+   * Print the contents of _local_eim_basis_functions to libMesh::out.
+   * Helper function mainly useful for debugging.
+   */
+  void print_local_eim_basis_functions() const;
 };
 
 }
