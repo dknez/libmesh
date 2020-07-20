@@ -569,21 +569,21 @@ read_in_basis_functions(const std::string & directory_name,
       xdr.data(n_bf);
 
       // Debugging:
-      libMesh::out << "Preparing to read in n_bf = " << n_bf << " basis functions." << std::endl;
+      // libMesh::out << "Preparing to read in n_bf = " << n_bf << " basis functions." << std::endl;
 
       // Read in the number of elements
       std::size_t n_elem;
       xdr.data(n_elem);
 
       // Debugging:
-      libMesh::out << "Reading in data for n_elem = " << n_elem << " elements." << std::endl;
+      // libMesh::out << "Reading in data for n_elem = " << n_elem << " elements." << std::endl;
 
       // Read in the number of variables.
       std::size_t n_vars;
       xdr.data(n_vars);
 
       // Debugging:
-      libMesh::out << "Reading in data for n_vars = " << n_vars << " variables." << std::endl;
+      // libMesh::out << "Reading in data for n_vars = " << n_vars << " variables." << std::endl;
 
       // Read in vector containing the number of QPs per elem. We can
       // create this vector with the required size or let it be read
@@ -592,10 +592,10 @@ read_in_basis_functions(const std::string & directory_name,
       xdr.data(n_qp_per_elem);
 
       // Debugging:
-      libMesh::out << "Number of qps per elem: ";
-      for (const auto & n_qp : n_qp_per_elem)
-        libMesh::out << n_qp << " ";
-      libMesh::out << std::endl;
+      // libMesh::out << "Number of qps per elem: ";
+      // for (const auto & n_qp : n_qp_per_elem)
+      //   libMesh::out << n_qp << " ";
+      // libMesh::out << std::endl;
 
       // The total amount of qp data for each var is the sum of the
       // entries in the "n_qp_per_elem" array.
@@ -606,7 +606,7 @@ read_in_basis_functions(const std::string & directory_name,
                         std::plus<unsigned int>());
 
       // Debugging:
-      libMesh::out << "n_qp_data = " << n_qp_data << std::endl;
+      // libMesh::out << "n_qp_data = " << n_qp_data << std::endl;
 
       // Allocate space to store all required basis functions,
       // clearing any data that may have been there previously.
@@ -662,7 +662,7 @@ read_in_basis_functions(const std::string & directory_name,
         }
 
       // Debugging: check that the data was read in correctly.
-      // this->print_local_eim_basis_functions();
+      this->print_local_eim_basis_functions();
 
     } // end if processor 0
 }
