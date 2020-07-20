@@ -34,6 +34,7 @@
 #include <sstream>
 #include <fstream>
 #include <numeric> // std::accumulate
+#include <iterator> // std::advance
 
 namespace libMesh
 {
@@ -624,8 +625,18 @@ read_in_basis_functions(const std::string & directory_name,
 
       // Allocate space to store all required basis functions,
       // clearing any data that may have been there previously.
+      //
+      // TODO: Do we need to also write out/read in Elem ids?
+      // Or can we assume they will always be contiguously
+      // numbered (at least on proc 0)?
       _local_eim_basis_functions.clear();
       _local_eim_basis_functions.resize(n_bf);
+      for (auto i : index_range(_local_eim_basis_functions))
+        for (std::size_t elem_id=0; elem_id<n_elem; ++elem_id)
+          {
+            auto & array = _local_eim_basis_functions[i][elem_id];
+            array.resize(n_vars);
+          }
 
       // Allocate space to store n_vars continguous vectors of length
       // n_qp_data for each basis function.
@@ -647,10 +658,24 @@ read_in_basis_functions(const std::string & directory_name,
               xdr.data_stream(qp_data[var].data(), qp_data[var].size());
 
               // Debugging
-              libMesh::out << "Basis function " << i << ", variable " << var << ": ";
-              for (const auto & val : qp_data[var])
-                libMesh::out << val << " ";
-              libMesh::out << std::endl;
+              // libMesh::out << "Basis function " << i << ", variable " << var << ": ";
+              // for (const auto & val : qp_data[var])
+              //   libMesh::out << val << " ";
+              // libMesh::out << std::endl;
+
+              // Iterate over the qp_data[var] vector, filling in the
+              // "small" vectors for each Elem.
+              auto cursor = qp_data[var].begin();
+              for (std::size_t elem_id=0; elem_id<n_elem; ++elem_id)
+                {
+                  // Get reference to the [n_vars][n_qp] array for
+                  // this Elem. We assign() into the vector of
+                  // quadrature point values, which allocates space if
+                  // it doesn't already exist.
+                  auto & array = _local_eim_basis_functions[i][elem_id];
+                  array[var].assign(cursor, cursor + n_qp_per_elem[elem_id]);
+                  std::advance(cursor, n_qp_per_elem[elem_id]);
+                }
             }
         }
     }
