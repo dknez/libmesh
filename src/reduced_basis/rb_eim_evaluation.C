@@ -508,8 +508,7 @@ write_out_basis_functions(const std::string & directory_name,
       auto n_qp_data =
         std::accumulate(n_qp_per_elem.begin(),
                         n_qp_per_elem.end(),
-                        0,
-                        std::plus<unsigned int>());
+                        0u);
 
       // Reserve space to store continguous vectors of qp data for each var
       std::vector<std::vector<Number>> qp_data(n_vars);
@@ -616,8 +615,7 @@ read_in_basis_functions(const std::string & directory_name,
       auto n_qp_data =
         std::accumulate(n_qp_per_elem.begin(),
                         n_qp_per_elem.end(),
-                        0,
-                        std::plus<unsigned int>());
+                        0u);
 
       // Debugging:
       // libMesh::out << "n_qp_data = " << n_qp_data << std::endl;
