@@ -480,8 +480,17 @@ write_out_basis_functions(const std::string & directory_name,
       // have the same number of qps.
       std::vector<unsigned int> n_qp_per_elem;
       n_qp_per_elem.reserve(n_elem);
+      dof_id_type expected_elem_id = 0;
       for (const auto & pr : _local_eim_basis_functions[0])
         {
+          // TODO: Currently we require that the Elems are numbered
+          // contiguously from [0..n_elem).  This allows us to avoid
+          // writing the Elem ids to the Xdr file, but if we need to
+          // generalize this assumption later, we can.
+          const auto & actual_elem_id = pr.first;
+          if (actual_elem_id != expected_elem_id++)
+            libmesh_error_msg("RBEIMEvaluation currently assumes a contiguous Elem numbering starting from 0.");
+
           // array[n_vars][n_qp] per Elem. We get the number of QPs
           // for variable 0, assuming they are all the same.
           const auto & array = pr.second;
