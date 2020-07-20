@@ -623,34 +623,31 @@ read_in_basis_functions(const std::string & directory_name,
             array.resize(n_vars);
           }
 
-      // Allocate space to store n_vars continguous vectors of length
-      // n_qp_data for each basis function.
-      std::vector<std::vector<Real>> qp_data(n_vars);
-      // for (auto var : index_range(qp_data))
-      //   qp_data[var].resize(n_qp_data);
+      // Allocate temporary storage for one var's worth of qp data.
+      std::vector<Real> qp_data;
 
       // Read in data for each basis function
       for (auto i : index_range(_local_eim_basis_functions))
         {
           for (std::size_t var=0; var<n_vars; ++var)
             {
-              qp_data[var].clear();
-              qp_data[var].resize(n_qp_data);
+              qp_data.clear();
+              qp_data.resize(n_qp_data);
 
               // Read data using data_stream() since that is
               // (currently) how we write it out. The "line_break"
               // parameter of data_stream() is ignored while reading.
-              xdr.data_stream(qp_data[var].data(), qp_data[var].size());
+              xdr.data_stream(qp_data.data(), qp_data.size());
 
               // Debugging
               // libMesh::out << "Basis function " << i << ", variable " << var << ": ";
-              // for (const auto & val : qp_data[var])
+              // for (const auto & val : qp_data)
               //   libMesh::out << val << " ";
               // libMesh::out << std::endl;
 
-              // Iterate over the qp_data[var] vector, filling in the
+              // Iterate over the qp_data vector, filling in the
               // "small" vectors for each Elem.
-              auto cursor = qp_data[var].begin();
+              auto cursor = qp_data.begin();
               for (std::size_t elem_id=0; elem_id<n_elem; ++elem_id)
                 {
                   // Get reference to the [n_vars][n_qp] array for
@@ -665,7 +662,7 @@ read_in_basis_functions(const std::string & directory_name,
         }
 
       // Debugging: check that the data was read in correctly.
-      this->print_local_eim_basis_functions();
+      // this->print_local_eim_basis_functions();
 
     } // end if processor 0
 }
