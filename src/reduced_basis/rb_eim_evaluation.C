@@ -498,7 +498,7 @@ write_out_basis_functions(const std::string & directory_name,
                         std::plus<unsigned int>());
 
       // Reserve space to store continguous vectors of qp data for each var
-      std::vector<std::vector<Real>> qp_data(n_vars);
+      std::vector<std::vector<Number>> qp_data(n_vars);
       for (auto var : index_range(qp_data))
         qp_data[var].reserve(n_qp_data);
 
