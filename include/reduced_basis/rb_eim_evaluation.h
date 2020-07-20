@@ -260,7 +260,7 @@ public:
    * to the RBEvaluation function of the same name.
    */
   void read_in_basis_functions(const std::string & directory_name = "offline_data",
-                               const bool read_binary_basis_functions = true);
+                               bool read_binary_basis_functions = true);
 
 private:
 
