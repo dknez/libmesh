@@ -629,6 +629,9 @@ read_in_basis_functions(const std::string & directory_name,
       // Read in data for each basis function
       for (auto i : index_range(_local_eim_basis_functions))
         {
+          // Reference to the data map for the current basis function.
+          auto & bf_map = _local_eim_basis_functions[i];
+
           for (std::size_t var=0; var<n_vars; ++var)
             {
               qp_data.clear();
@@ -654,7 +657,7 @@ read_in_basis_functions(const std::string & directory_name,
                   // this Elem. We assign() into the vector of
                   // quadrature point values, which allocates space if
                   // it doesn't already exist.
-                  auto & array = _local_eim_basis_functions[i][elem_id];
+                  auto & array = bf_map[elem_id];
                   array[var].assign(cursor, cursor + n_qp_per_elem[elem_id]);
                   std::advance(cursor, n_qp_per_elem[elem_id]);
                 }
@@ -662,7 +665,7 @@ read_in_basis_functions(const std::string & directory_name,
         }
 
       // Debugging: check that the data was read in correctly.
-      this->print_local_eim_basis_functions();
+      // this->print_local_eim_basis_functions();
 
     } // end if processor 0
 }
