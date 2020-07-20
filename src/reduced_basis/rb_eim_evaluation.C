@@ -483,15 +483,15 @@ write_out_basis_functions(const std::string & directory_name,
       dof_id_type expected_elem_id = 0;
       for (const auto & pr : _local_eim_basis_functions[0])
         {
-          // TODO: Currently we require that the Elems are numbered
+          // Note: Currently we require that the Elems are numbered
           // contiguously from [0..n_elem).  This allows us to avoid
           // writing the Elem ids to the Xdr file, but if we need to
           // generalize this assumption later, we can.
           const auto & actual_elem_id = pr.first;
 
           // Debugging:
-          libMesh::err << "actual_elem_id=" << actual_elem_id << std::endl;
-          libMesh::err << "expected_elem_id=" << expected_elem_id << std::endl;
+          // libMesh::err << "actual_elem_id=" << actual_elem_id << std::endl;
+          // libMesh::err << "expected_elem_id=" << expected_elem_id << std::endl;
 
           if (actual_elem_id != expected_elem_id++)
             libmesh_error_msg("RBEIMEvaluation currently assumes a contiguous Elem numbering starting from 0.");
