@@ -748,12 +748,6 @@ void RBEIMEvaluation::gather_bfs()
   auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
   this->comm().verify(n_vars);
 
-  // Gather the number of Elems stored on each processor to proc 0.
-  // We use basis function 0 to determine this.
-  std::vector<std::size_t> n_elems_each_proc =
-    { _local_eim_basis_functions[0].size() };
-  this->comm().gather(/*root_id*/0, n_elems_each_proc);
-
   // Gather list of Elem ids stored on each processor to proc 0.  We
   // use basis function 0 as an example and assume all the basis
   // functions are distributed similarly.
@@ -767,7 +761,7 @@ void RBEIMEvaluation::gather_bfs()
   // basis function 0 (and variable 0) to get this information, then
   // apply it to all basis functions.
   std::vector<unsigned int> n_qp_per_elem;
-  n_qp_per_elem.reserve(n_elems_each_proc[0]);
+  n_qp_per_elem.reserve(_local_eim_basis_functions[0].size());
   for (const auto & pr : _local_eim_basis_functions[0])
     {
       // array[n_vars][n_qp] per Elem. We get the number of QPs
@@ -778,28 +772,19 @@ void RBEIMEvaluation::gather_bfs()
 
   // Before gathering, compute the total amount of local qp data for
   // each var, which is the sum of the entries in the "n_qp_per_elem" array.
+  // This will be used to reserve space in a vector below.
   auto n_local_qp_data =
     std::accumulate(n_qp_per_elem.begin(),
                     n_qp_per_elem.end(),
                     0u);
 
-  // Gather the number of qps per Elem on each processor.
+  // Gather the number of qps per Elem for each processor onto processor 0.
   this->comm().gather(/*root_id=*/0, n_qp_per_elem);
 
-  // Gather the amount of local qp data stored (per bf, per variable)
-  // on each proc onto processor 0. "n_qp_data" should only be used on
-  // processor 0.
-  std::vector<unsigned int> n_qp_data = {n_local_qp_data};
-  this->comm().gather(/*root_id=*/0, n_qp_data);
-
-  // Note: we can only access into the "full" elem_ids and n_elems_each_proc
-  // vectors on processor 0, since they are only gathered there.
-  if (this->processor_id() == 0)
-    {
-      // Make sure we have gathered the same number of elem ids and qps per Elem.
-      if (elem_ids.size() != n_qp_per_elem.size())
-        libmesh_error_msg("Must gather same number of Elem ids as qps per Elem.");
-    } // end if proc == 0
+  // Sanity check: On processor 0, this checks that we have gathered the same number
+  // of elem ids and qp counts.
+  if (elem_ids.size() != n_qp_per_elem.size())
+    libmesh_error_msg("Must gather same number of Elem ids as qps per Elem.");
 
   // Reserve space to store contiguous vectors of qp data for each var
   std::vector<std::vector<Number>> gathered_qp_data(n_vars);
