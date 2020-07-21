@@ -864,9 +864,6 @@ void RBEIMEvaluation::gather_bfs()
 
 void RBEIMEvaluation::distribute_bfs(const System & sys)
 {
-  // Debugging:
-  libMesh::out << "Called RBEIMEvaluation::distribute_bfs()" << std::endl;
-
   // So we can avoid calling these many times below
   auto n_procs = sys.comm().size();
   auto rank = sys.comm().rank();
@@ -890,10 +887,6 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
   auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
   sys.comm().broadcast(n_vars);
 
-  // Debugging:
-  libMesh::out << "Number of basis functions: " << n_bf << std::endl;
-  libMesh::out << "Number of vars: " << n_vars << std::endl;
-
   // Construct lists of elem ids owned by different processors
   const MeshBase & mesh = sys.get_mesh();
 
@@ -912,15 +905,6 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
   auto n_local_elems = gathered_local_elem_ids.size();
   std::vector<std::size_t> gathered_n_local_elems = {n_local_elems};
   sys.comm().gather(/*root_id=*/0, gathered_n_local_elems);
-
-  // Debugging:
-  if (rank == 0)
-    {
-      libMesh::out << "Number of local elems on each proc: ";
-      for (const auto & n_elem : gathered_n_local_elems)
-        libMesh::out << n_elem << " ";
-      libMesh::out << std::endl;
-    }
 
   // Gather the elem ids owned by each processor onto processor 0.
   sys.comm().gather(/*root_id=*/0, gathered_local_elem_ids);
@@ -941,25 +925,7 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
       end_elem_ids_index[n_procs - 1] = gathered_local_elem_ids.size();
       for (processor_id_type p=0; p<n_procs - 1; ++p)
         end_elem_ids_index[p] = start_elem_ids_index[p+1];
-
-      // Debugging
-      libMesh::out << "Starting elem indices for each processor: ";
-      for (const auto & idx : start_elem_ids_index)
-        libMesh::out << idx << " ";
-      libMesh::out << std::endl;
-
-      // Debugging:
-      libMesh::out << "Ending elem indices for each processor: ";
-      for (const auto & idx : end_elem_ids_index)
-        libMesh::out << idx << " ";
-      libMesh::out << std::endl;
-
-      // Debugging:
-      // libMesh::out << "Gathered local elem ids for all processors " << rank << ": ";
-      // for (const auto & id : gathered_local_elem_ids)
-      //   libMesh::out << id << " ";
-      // libMesh::out << std::endl;
-    } // end if processor_id==0
+    }
 
   // On processor 0, using basis function 0 and variable 0, prepare a
   // vector with the number of qps per Elem.  Then scatter this vector
@@ -969,7 +935,7 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
   std::vector<unsigned int> n_qp_per_elem_data;
 
   // On rank 0, the "counts" vector holds the number of floating point values that
-  // are to be scattered to each proc. It is only required on proc 0
+  // are to be scattered to each proc. It is only required on proc 0.
   std::vector<int> counts;
 
   if (rank == 0)
@@ -998,12 +964,6 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
               counts[p] += n_qps;
             } // end for (e)
         } // end for proc_id
-
-      // Debugging:
-      libMesh::out << "counts = ";
-      for (const auto & c : counts)
-        libMesh::out << c << " ";
-      libMesh::out << std::endl;
     } // if (rank == 0)
 
   // Now scatter the n_qp_per_elem_data to all procs (must call the
@@ -1012,15 +972,6 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
     std::vector<unsigned int> recv;
     std::vector<int> tmp(gathered_n_local_elems.begin(), gathered_n_local_elems.end());
     sys.comm().scatter(n_qp_per_elem_data, tmp, recv, /*root_id=*/0);
-
-    // Debugging: Print the received info on non-zero ranks
-    if (rank != 0)
-      {
-        libMesh::out << "Received " << recv.size() << " qp_per_elem values: ";
-        for (const auto & val : recv)
-          libMesh::out << val << " ";
-        libMesh::out << std::endl;
-      }
 
     // Now swap n_qp_per_elem_data and recv. All processors now have a
     // vector of length n_local_elems containing the number of
@@ -1089,29 +1040,11 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
       // Perform the scatters (all procs)
       for (auto var : make_range(n_vars))
         {
-          // Debugging:
-          if (rank == 0)
-            {
-              libMesh::out << "Basis function " << bf
-                           << ", Variable " << var
-                           << ", scattering qp_data[var].size() = " << qp_data[var].size()
-                           << " values." << std::endl;
-            }
-
-          // libMesh::out << "About to call scatter..." << std::endl;
-
           // Do the scatter for the current var
           sys.comm().scatter(qp_data[var], counts, recv_qp_data, /*root_id=*/0);
 
-          // libMesh::out << "Done calling scatter!" << std::endl;
-
           if (rank != 0)
             {
-              // Debugging:
-              libMesh::out << "Processor id: " << rank
-                           << ", recv_qp_data.size()= " << recv_qp_data.size()
-                           << std::endl;
-
               // Store the scattered data we received in _local_eim_basis_functions[bf]
               auto & bf_map = _local_eim_basis_functions[bf];
               auto cursor = recv_qp_data.begin();
@@ -1149,14 +1082,6 @@ void RBEIMEvaluation::distribute_bfs(const System & sys)
                 bf_map.erase(elem_id);
             } // end for (e)
         } // end for proc_id
-
-      // Debugging: how much data is left in our maps now?
-      for (auto bf : index_range(_local_eim_basis_functions))
-        {
-          libMesh::out << "Basis function " << bf
-                       << ", size = " <<  _local_eim_basis_functions[bf].size()
-                       << std::endl;
-        }
     } // if (rank == 0)
 }
 
