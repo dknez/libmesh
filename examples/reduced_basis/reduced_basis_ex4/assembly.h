@@ -40,6 +40,7 @@ using libMesh::RealGradient;
 using libMesh::Elem;
 using libMesh::FEBase;
 using libMesh::subdomain_id_type;
+using libMesh::Utility::pow;
 
 struct ShiftedGaussian : public RBParametrizedFunction
 {
@@ -55,7 +56,7 @@ struct ShiftedGaussian : public RBParametrizedFunction
   {
     Real center_x = mu.get_value("center_x");
     Real center_y = mu.get_value("center_y");
-    return std::vector<Number> { std::exp(-2. * (Utility::pow<2>(center_x - p(0)) + Utility::pow<2>(center_y - p(1)))) };
+    return std::vector<Number> { std::exp(-2. * (pow<2>(center_x - p(0)) + pow<2>(center_y - p(1)))) };
   }
 };
 
