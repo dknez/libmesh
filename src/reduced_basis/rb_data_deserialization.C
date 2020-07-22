@@ -765,7 +765,7 @@ void load_rb_eim_evaluation_data(RBEIMEvaluation & rb_eim_evaluation,
 
     for (unsigned int i=0; i<n_bfs; ++i)
       {
-        rb_eim_evaluation.add_interpolation_points_elem_id(interpolation_points_qp_list[i]);
+        rb_eim_evaluation.add_interpolation_points_qp(interpolation_points_qp_list[i]);
       }
   }
 
