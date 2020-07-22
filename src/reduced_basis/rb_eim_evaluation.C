@@ -84,7 +84,7 @@ void RBEIMEvaluation::set_parametrized_function(std::unique_ptr<RBParametrizedFu
 
 RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function()
 {
-  if(!_parametrized_function)
+  if (!_parametrized_function)
     libmesh_error_msg("Parametrized function not initialized yet");
 
   return *_parametrized_function;
@@ -176,13 +176,13 @@ void RBEIMEvaluation::set_n_basis_functions(unsigned int n_bfs)
 void RBEIMEvaluation::decrement_vector(QpDataMap & v,
                                        const DenseVector<Number> & coeffs)
 {
-  if(get_n_basis_functions() != coeffs.size())
+  if (get_n_basis_functions() != coeffs.size())
     libmesh_error_msg("Error: Number of coefficients should match number of basis functions");
 
-  for (const auto v_it : v)
+  for (auto & pr : v)
     {
-      dof_id_type elem_id = v_it.first;
-      const auto & v_comp_and_qp = v_it.second;
+      dof_id_type elem_id = pr.first;
+      auto & v_comp_and_qp = pr.second;
 
       for (const auto & comp : index_range(v_comp_and_qp))
         for (unsigned int qp : index_range(v_comp_and_qp[comp]))
@@ -190,17 +190,14 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
             {
               // Check that entry (elem_id,comp,qp) exists in _local_eim_basis_functions so that
               // we get a clear error message if there is any missing data
-              auto basis_it = _local_eim_basis_functions[i].find(elem_id);
-              if (basis_it == _local_eim_basis_functions[i].end())
-                libmesh_error_msg("Error: Missing elem_id");
+              const auto & basis_comp_and_qp = libmesh_map_find(_local_eim_basis_functions[i], elem_id);
 
-              const auto & basis_comp_and_qp = basis_it->second;
-              if(comp >= basis_comp_and_qp.size())
+              if (comp >= basis_comp_and_qp.size())
                 libmesh_error_msg("Error: Invalid comp");
-              if(qp >= basis_comp_and_qp[comp].size())
+              if (qp >= basis_comp_and_qp[comp].size())
                 libmesh_error_msg("Error: Invalid qp");
 
-              v[elem_id][comp][qp] -= coeffs(i) * basis_comp_and_qp[comp][qp];
+              v_comp_and_qp[comp][qp] -= coeffs(i) * basis_comp_and_qp[comp][qp];
             }
     }
 
@@ -210,7 +207,7 @@ void RBEIMEvaluation::initialize_eim_theta_objects()
 {
   // Initialize the rb_theta objects that access the solution from this rb_eim_evaluation
   _rb_eim_theta_objects.clear();
-  for (unsigned int i=0; i<get_n_basis_functions(); i++)
+  for (auto i : make_range(get_n_basis_functions()))
     _rb_eim_theta_objects.emplace_back(build_eim_theta(i));
 }
 
@@ -235,10 +232,10 @@ void RBEIMEvaluation::get_parametrized_function_values_at_qps(
   values.clear();
 
   const auto it = pf.find(elem_id);
-  if(it != pf.end())
+  if (it != pf.end())
   {
     const auto & comps_and_qps_on_elem = it->second;
-    if(comp >= comps_and_qps_on_elem.size())
+    if (comp >= comps_and_qps_on_elem.size())
     {
       libmesh_error_msg("Invalid comp index: " + std::to_string(comp));
     }
@@ -259,9 +256,9 @@ Number RBEIMEvaluation::get_parametrized_function_value(
 
   // In parallel, values should only be non-empty on one processor
   Number value = 0.;
-  if(!values.empty())
+  if (!values.empty())
   {
-    if(qp >= values.size())
+    if (qp >= values.size())
       libmesh_error_msg("Error: Invalid qp index");
 
     value = values[qp];
@@ -276,7 +273,7 @@ void RBEIMEvaluation::get_eim_basis_function_values_at_qps(unsigned int basis_fu
                                                            unsigned int comp,
                                                            std::vector<Number> & values) const
 {
-  if(basis_function_index >= _local_eim_basis_functions.size())
+  if (basis_function_index >= _local_eim_basis_functions.size())
   {
     libmesh_error_msg("Invalid basis function index: " + std::to_string(basis_function_index));
   }
@@ -293,7 +290,7 @@ Number RBEIMEvaluation::get_eim_basis_function_value(unsigned int basis_function
                                                      unsigned int comp,
                                                      unsigned int qp) const
 {
-  if(basis_function_index >= _local_eim_basis_functions.size())
+  if (basis_function_index >= _local_eim_basis_functions.size())
   {
     libmesh_error_msg("Invalid basis function index: " + std::to_string(basis_function_index));
   }
@@ -350,7 +347,7 @@ void RBEIMEvaluation::add_interpolation_points_qp(unsigned int qp)
 
 Point RBEIMEvaluation::get_interpolation_points_xyz(unsigned int index) const
 {
-  if(index >= _interpolation_points_xyz.size())
+  if (index >= _interpolation_points_xyz.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_xyz[index];
@@ -358,7 +355,7 @@ Point RBEIMEvaluation::get_interpolation_points_xyz(unsigned int index) const
 
 unsigned int RBEIMEvaluation::get_interpolation_points_comp(unsigned int index) const
 {
-  if(index >= _interpolation_points_comp.size())
+  if (index >= _interpolation_points_comp.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_comp[index];
@@ -366,7 +363,7 @@ unsigned int RBEIMEvaluation::get_interpolation_points_comp(unsigned int index) 
 
 subdomain_id_type RBEIMEvaluation::get_interpolation_points_subdomain_id(unsigned int index) const
 {
-  if(index >= _interpolation_points_subdomain_id.size())
+  if (index >= _interpolation_points_subdomain_id.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_subdomain_id[index];
@@ -374,7 +371,7 @@ subdomain_id_type RBEIMEvaluation::get_interpolation_points_subdomain_id(unsigne
 
 const std::vector<Point> & RBEIMEvaluation::get_interpolation_points_xyz_perturbations(unsigned int index) const
 {
-  if(index >= _interpolation_points_xyz_perturbations.size())
+  if (index >= _interpolation_points_xyz_perturbations.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_xyz_perturbations[index];
@@ -382,7 +379,7 @@ const std::vector<Point> & RBEIMEvaluation::get_interpolation_points_xyz_perturb
 
 dof_id_type RBEIMEvaluation::get_interpolation_points_elem_id(unsigned int index) const
 {
-  if(index >= _interpolation_points_elem_id.size())
+  if (index >= _interpolation_points_elem_id.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_elem_id[index];
@@ -390,7 +387,7 @@ dof_id_type RBEIMEvaluation::get_interpolation_points_elem_id(unsigned int index
 
 unsigned int RBEIMEvaluation::get_interpolation_points_qp(unsigned int index) const
 {
-  if(index >= _interpolation_points_qp.size())
+  if (index >= _interpolation_points_qp.size())
     libmesh_error_msg("Error: Invalid index");
 
   return _interpolation_points_qp[index];
@@ -398,7 +395,7 @@ unsigned int RBEIMEvaluation::get_interpolation_points_qp(unsigned int index) co
 
 void RBEIMEvaluation::set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value)
 {
-  if( (i >= _interpolation_matrix.m()) || (j >= _interpolation_matrix.n()) )
+  if ( (i >= _interpolation_matrix.m()) || (j >= _interpolation_matrix.n()) )
     libmesh_error_msg("Error: Invalid matrix indices");
 
   _interpolation_matrix(i,j) = value;

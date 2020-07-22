@@ -50,9 +50,14 @@ public:
   RBParametrizedFunction();
 
   /**
-   * Virtual evaluate() gives us a vtable, so there's no cost in adding a
-   * virtual destructor for safety's sake.
+   * Special functions.
+   * - This class can be default copy/move assigned/constructed.
+   * - The destructor is defaulted out-of-line.
    */
+  RBParametrizedFunction (RBParametrizedFunction &&) = default;
+  RBParametrizedFunction (const RBParametrizedFunction &) = default;
+  RBParametrizedFunction & operator= (const RBParametrizedFunction &) = default;
+  RBParametrizedFunction & operator= (RBParametrizedFunction &&) = default;
   virtual ~RBParametrizedFunction();
 
   /**

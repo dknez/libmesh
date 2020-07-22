@@ -101,10 +101,10 @@ int main (int argc, char ** argv)
 
   ReplicatedMesh mesh (init.comm(), dim);
   MeshTools::Generation::build_square (mesh,
-                                      n_elem, n_elem,
-                                      -1., 1.,
-                                      -1., 1.,
-                                      QUAD4);
+                                       n_elem, n_elem,
+                                       -1., 1.,
+                                       -1., 1.,
+                                       QUAD4);
 
   if (!online_mode)
     {

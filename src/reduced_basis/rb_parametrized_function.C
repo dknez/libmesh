@@ -17,10 +17,12 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
+// libmesh includes
 #include "libmesh/rb_parametrized_function.h"
 #include "libmesh/int_range.h"
 #include "libmesh/point.h"
 #include "libmesh/libmesh_logging.h"
+#include "libmesh/utility.h"
 
 namespace libMesh
 {
@@ -31,7 +33,7 @@ requires_xyz_perturbations(false),
 fd_delta(1.e-6)
 {}
 
-RBParametrizedFunction::~RBParametrizedFunction() {}
+RBParametrizedFunction::~RBParametrizedFunction() = default;
 
 Number RBParametrizedFunction::evaluate(const RBParameters & mu,
                                         unsigned int comp,
@@ -62,10 +64,7 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
       dof_id_type elem_id = xyz_pair.first;
       const std::vector<Point> & xyz_vec = xyz_pair.second;
 
-      auto sbd_it = sbd_ids.find(elem_id);
-      if (sbd_it == sbd_ids.end())
-        libmesh_error_msg("Error: elem_id not found");
-      subdomain_id_type subdomain_id = sbd_it->second;
+      subdomain_id_type subdomain_id = libmesh_map_find(sbd_ids, elem_id);
 
       std::vector<std::vector<Number>> evaluated_values(xyz_vec.size());
       for (unsigned int qp : index_range(xyz_vec))
@@ -73,12 +72,8 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
           std::vector<Number> evaluated_values_at_qp;
           if (requires_xyz_perturbations)
             {
-              auto xyz_perturb_it = all_xyz_perturb.find(elem_id);
-              if (xyz_perturb_it == all_xyz_perturb.end())
-                {
-                  libmesh_error_msg("Error: elem_id not found");
-                }
-              const std::vector<std::vector<Point>> & qps_and_perturbs = xyz_perturb_it->second;
+              const auto & qps_and_perturbs =
+                libmesh_map_find(all_xyz_perturb, elem_id);
 
               if (qp >= qps_and_perturbs.size())
                 libmesh_error_msg("Error: Invalid qp");
@@ -120,11 +115,8 @@ Number RBParametrizedFunction::lookup_preevaluated_value(unsigned int comp,
                                                          dof_id_type elem_id,
                                                          unsigned int qp) const
 {
-  const auto elem_it = preevaluated_values.find(elem_id);
-  if (elem_it == preevaluated_values.end())
-    libmesh_error_msg("Error: elem_id not found");
-
-  const std::vector<std::vector<Number>> & values = elem_it->second;
+  const auto & values =
+    libmesh_map_find(preevaluated_values, elem_id);
 
   if (comp >= values.size())
     libmesh_error_msg("Error: invalid comp");
