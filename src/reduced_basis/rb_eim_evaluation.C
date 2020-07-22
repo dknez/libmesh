@@ -431,14 +431,6 @@ write_out_basis_functions(const std::string & directory_name,
 {
   LOG_SCOPE("write_out_basis_functions()", "RBEIMEvaluation");
 
-  libMesh::out << "Called RBEIMEvaluation::write_out_basis_functions()" << std::endl;
-  libMesh::out << "Writing to directory: " << directory_name << std::endl;
-  libMesh::out << "write_binary_basis_functions = " << write_binary_basis_functions << std::endl;
-  libMesh::out << "_local_eim_basis_functions.size()=" << _local_eim_basis_functions.size() << std::endl;
-
-  // Debugging: Print values to screen
-  // this->print_local_eim_basis_functions();
-
   // Quick return if there is no work to do. Note: make sure all procs
   // agree there is no work to do.
   bool is_empty = _local_eim_basis_functions.empty();
@@ -498,10 +490,6 @@ write_out_basis_functions(const std::string & directory_name,
           // generalize this assumption later, we can.
           const auto & actual_elem_id = pr.first;
 
-          // Debugging:
-          // libMesh::err << "actual_elem_id=" << actual_elem_id << std::endl;
-          // libMesh::err << "expected_elem_id=" << expected_elem_id << std::endl;
-
           if (actual_elem_id != expected_elem_id++)
             libmesh_error_msg("RBEIMEvaluation currently assumes a contiguous Elem numbering starting from 0.");
 
@@ -549,23 +537,7 @@ write_out_basis_functions(const std::string & directory_name,
 
           // Write all the var values for this bf
           for (auto var : index_range(qp_data))
-            {
-              // Debugging: print qp_data[var]
-              // libMesh::out << "Basis function " << bf << ", variable " << var << ": " << std::endl;
-              // for (const auto & val : qp_data[var])
-              //   libMesh::out << val << " ";
-              // libMesh::out << std::endl;
-
-              // Write by calling data()
-              // std::string comment = "# Basis function " + std::to_string(bf) + ", variable " + std::to_string(var);
-              // xdr.data(qp_data[var], comment.c_str());
-
-              // Write by calling data_stream(). I found that using an
-              // arbitrary line break does not work correctly, it
-              // seems to access uninitialized memory past the end of
-              // the vector if it is not a multiple of the array size?
-              xdr.data_stream(qp_data[var].data(), qp_data[var].size(), /*line_break=*/qp_data[var].size());
-            }
+            xdr.data_stream(qp_data[var].data(), qp_data[var].size(), /*line_break=*/qp_data[var].size());
         }
     }
 }
@@ -593,22 +565,13 @@ read_in_basis_functions(System & rb_construction,
       std::size_t n_bf;
       xdr.data(n_bf);
 
-      // Debugging:
-      // libMesh::out << "Preparing to read in n_bf = " << n_bf << " basis functions." << std::endl;
-
       // Read in the number of elements
       std::size_t n_elem;
       xdr.data(n_elem);
 
-      // Debugging:
-      // libMesh::out << "Reading in data for n_elem = " << n_elem << " elements." << std::endl;
-
       // Read in the number of variables.
       std::size_t n_vars;
       xdr.data(n_vars);
-
-      // Debugging:
-      // libMesh::out << "Reading in data for n_vars = " << n_vars << " variables." << std::endl;
 
       // Read in vector containing the number of QPs per elem. We can
       // create this vector with the required size or let it be read
@@ -616,21 +579,12 @@ read_in_basis_functions(System & rb_construction,
       std::vector<unsigned int> n_qp_per_elem(n_elem);
       xdr.data(n_qp_per_elem);
 
-      // Debugging:
-      // libMesh::out << "Number of qps per elem: ";
-      // for (const auto & n_qp : n_qp_per_elem)
-      //   libMesh::out << n_qp << " ";
-      // libMesh::out << std::endl;
-
       // The total amount of qp data for each var is the sum of the
       // entries in the "n_qp_per_elem" array.
       auto n_qp_data =
         std::accumulate(n_qp_per_elem.begin(),
                         n_qp_per_elem.end(),
                         0u);
-
-      // Debugging:
-      // libMesh::out << "n_qp_data = " << n_qp_data << std::endl;
 
       // Allocate space to store all required basis functions,
       // clearing any data that may have been there previously.
@@ -666,12 +620,6 @@ read_in_basis_functions(System & rb_construction,
               // parameter of data_stream() is ignored while reading.
               xdr.data_stream(qp_data.data(), qp_data.size());
 
-              // Debugging
-              // libMesh::out << "Basis function " << i << ", variable " << var << ": ";
-              // for (const auto & val : qp_data)
-              //   libMesh::out << val << " ";
-              // libMesh::out << std::endl;
-
               // Iterate over the qp_data vector, filling in the
               // "small" vectors for each Elem.
               auto cursor = qp_data.begin();
@@ -685,11 +633,8 @@ read_in_basis_functions(System & rb_construction,
                   array[var].assign(cursor, cursor + n_qp_per_elem[elem_id]);
                   std::advance(cursor, n_qp_per_elem[elem_id]);
                 }
-            }
-        }
-
-      // Debugging: check that the data was read in correctly.
-      // this->print_local_eim_basis_functions();
+            } // end for (var)
+        } // end for (i)
     } // end if processor 0
 
   // Distribute the basis function information to the processors that require it
