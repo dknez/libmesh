@@ -359,7 +359,7 @@ Real RBEIMConstruction::train_eim_approximation()
 void RBEIMConstruction::initialize_eim_assembly_objects()
 {
   _rb_eim_assembly_objects.clear();
-  for (unsigned int i=0; i<get_rb_eim_evaluation().get_n_basis_functions(); i++)
+  for (auto i : make_range(get_rb_eim_evaluation().get_n_basis_functions()))
     _rb_eim_assembly_objects.push_back(build_eim_assembly(i));
 }
 
@@ -379,7 +379,7 @@ void RBEIMConstruction::init_context(FEMContext & c)
 
   for (unsigned int dim=1; dim<=3; ++dim)
     if (mesh.elem_dimensions().count(dim))
-      for (unsigned int var=0; var<sys.n_vars(); ++var)
+      for (auto var : make_range(sys.n_vars()))
       {
         auto fe = c.get_element_fe(var, dim);
         fe->get_JxW();
@@ -438,7 +438,7 @@ std::pair<Real,unsigned int> RBEIMConstruction::compute_max_eim_error()
   if (get_n_training_samples() != get_local_n_training_samples())
     libmesh_error_msg("Error: Training samples should be the same on all procs");
 
-  for (unsigned int i=0; i<get_n_training_samples(); i++)
+  for (auto i : make_range(get_n_training_samples()))
     {
       Real best_fit_error = compute_best_fit_error(i);
 
@@ -468,7 +468,7 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
   _local_parametrized_functions_for_training.resize( get_n_training_samples() );
-  for (unsigned int i=0; i<get_n_training_samples(); i++)
+  for (auto i : make_range(get_n_training_samples()))
     {
       libMesh::out << "Initializing parametrized function for training sample "
         << (i+1) << " of " << get_n_training_samples() << std::endl;
@@ -482,10 +482,10 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
 
       unsigned int n_comps = eim_eval.get_parametrized_function().get_n_components();
 
-      for (const auto local_quad_point_locations_it : _local_quad_point_locations)
+      for (const auto & pr : _local_quad_point_locations)
       {
-        dof_id_type elem_id = local_quad_point_locations_it.first;
-        const auto & xyz_vector = local_quad_point_locations_it.second;
+        dof_id_type elem_id = pr.first;
+        const auto & xyz_vector = pr.second;
 
         std::vector<std::vector<Number>> comps_and_qps(n_comps);
         for (unsigned int comp=0; comp<n_comps; comp++)
