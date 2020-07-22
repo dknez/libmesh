@@ -190,11 +190,8 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
             {
               // Check that entry (elem_id,comp,qp) exists in _local_eim_basis_functions so that
               // we get a clear error message if there is any missing data
-              auto basis_it = _local_eim_basis_functions[i].find(elem_id);
-              if (basis_it == _local_eim_basis_functions[i].end())
-                libmesh_error_msg("Error: Missing elem_id");
+              const auto & basis_comp_and_qp = libmesh_map_find(_local_eim_basis_functions[i], elem_id);
 
-              const auto & basis_comp_and_qp = basis_it->second;
               if(comp >= basis_comp_and_qp.size())
                 libmesh_error_msg("Error: Invalid comp");
               if(qp >= basis_comp_and_qp[comp].size())
