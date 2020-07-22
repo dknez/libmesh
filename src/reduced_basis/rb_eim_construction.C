@@ -65,9 +65,7 @@ RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
   serial_training_set = true;
 }
 
-RBEIMConstruction::~RBEIMConstruction ()
-{
-}
+RBEIMConstruction::~RBEIMConstruction () = default;
 
 void RBEIMConstruction::clear()
 {

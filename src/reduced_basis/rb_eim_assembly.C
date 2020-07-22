@@ -39,9 +39,7 @@ RBEIMAssembly::RBEIMAssembly(RBEIMConstruction & rb_eim_con,
 {
 }
 
-RBEIMAssembly::~RBEIMAssembly()
-{
-}
+RBEIMAssembly::~RBEIMAssembly() = default;
 
 void RBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
                                             unsigned int comp,

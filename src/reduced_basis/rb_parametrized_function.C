@@ -31,7 +31,7 @@ requires_xyz_perturbations(false),
 fd_delta(1.e-6)
 {}
 
-RBParametrizedFunction::~RBParametrizedFunction() {}
+RBParametrizedFunction::~RBParametrizedFunction() = default;
 
 Number RBParametrizedFunction::evaluate(const RBParameters & mu,
                                         unsigned int comp,

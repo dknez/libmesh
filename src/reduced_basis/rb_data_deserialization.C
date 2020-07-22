@@ -72,8 +72,7 @@ RBEvaluationDeserialization::RBEvaluationDeserialization(RBEvaluation & rb_eval)
   _rb_eval(rb_eval)
 {}
 
-RBEvaluationDeserialization::~RBEvaluationDeserialization()
-{}
+RBEvaluationDeserialization::~RBEvaluationDeserialization() = default;
 
 void RBEvaluationDeserialization::read_from_file(const std::string & path,
                                                  bool read_error_bound_data)

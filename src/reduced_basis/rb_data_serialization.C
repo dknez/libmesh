@@ -75,9 +75,7 @@ RBEvaluationSerialization::RBEvaluationSerialization(RBEvaluation & rb_eval)
 {
 }
 
-RBEvaluationSerialization::~RBEvaluationSerialization()
-{
-}
+RBEvaluationSerialization::~RBEvaluationSerialization() = default;
 
 void RBEvaluationSerialization::write_to_file(const std::string & path)
 {
