@@ -179,10 +179,10 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
   if(get_n_basis_functions() != coeffs.size())
     libmesh_error_msg("Error: Number of coefficients should match number of basis functions");
 
-  for (const auto v_it : v)
+  for (const auto & pr : v)
     {
-      dof_id_type elem_id = v_it.first;
-      const auto & v_comp_and_qp = v_it.second;
+      dof_id_type elem_id = pr.first;
+      const auto & v_comp_and_qp = pr.second;
 
       for (const auto & comp : index_range(v_comp_and_qp))
         for (unsigned int qp : index_range(v_comp_and_qp[comp]))
@@ -210,7 +210,7 @@ void RBEIMEvaluation::initialize_eim_theta_objects()
 {
   // Initialize the rb_theta objects that access the solution from this rb_eim_evaluation
   _rb_eim_theta_objects.clear();
-  for (unsigned int i=0; i<get_n_basis_functions(); i++)
+  for (auto i : make_range(get_n_basis_functions()))
     _rb_eim_theta_objects.emplace_back(build_eim_theta(i));
 }
 
