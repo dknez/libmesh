@@ -122,8 +122,7 @@ TransientRBEvaluationDeserialization(TransientRBEvaluation & trans_rb_eval) :
   _trans_rb_eval(trans_rb_eval)
 {}
 
-TransientRBEvaluationDeserialization::~TransientRBEvaluationDeserialization()
-{}
+TransientRBEvaluationDeserialization::~TransientRBEvaluationDeserialization() = default;
 
 void TransientRBEvaluationDeserialization::read_from_file(const std::string & path,
                                                           bool read_error_bound_data)
@@ -180,8 +179,7 @@ RBEIMEvaluationDeserialization(RBEIMEvaluation & rb_eim_eval) :
   _rb_eim_eval(rb_eim_eval)
 {}
 
-RBEIMEvaluationDeserialization::~RBEIMEvaluationDeserialization()
-{}
+RBEIMEvaluationDeserialization::~RBEIMEvaluationDeserialization() = default;
 
 void RBEIMEvaluationDeserialization::read_from_file(const std::string & path)
 {
@@ -235,8 +233,7 @@ RBSCMEvaluationDeserialization(RBSCMEvaluation & rb_scm_eval) :
   _rb_scm_eval(rb_scm_eval)
 {}
 
-RBSCMEvaluationDeserialization::~RBSCMEvaluationDeserialization()
-{}
+RBSCMEvaluationDeserialization::~RBSCMEvaluationDeserialization() = default;
 
 void RBSCMEvaluationDeserialization::read_from_file(const std::string & path)
 {
