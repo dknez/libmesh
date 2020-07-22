@@ -59,8 +59,7 @@ struct Gxyz : public RBParametrizedFunction
   {
     Real curvature = mu.get_value("curvature");
 
-    std::vector<Number> values {1. + curvature*p(0), 1. + curvature*p(0), 1./(1. + curvature*p(0))};
-    return values;
+    return {1. + curvature*p(0), 1. + curvature*p(0), 1./(1. + curvature*p(0))};
   }
 };
 
