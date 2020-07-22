@@ -829,6 +829,8 @@ void RBEIMConstruction::update_eim_matrices()
   RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
   unsigned int RB_size = eim_eval.get_n_basis_functions();
 
+  libmesh_assert_msg(RB_size >= 1, "Must have at least 1 basis function.");
+
   // update the matrix that is used to evaluate L2 projections
   // into the EIM approximation space
   for (unsigned int i=(RB_size-1); i<RB_size; i++)
