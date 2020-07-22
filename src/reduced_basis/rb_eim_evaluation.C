@@ -179,10 +179,10 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
   if(get_n_basis_functions() != coeffs.size())
     libmesh_error_msg("Error: Number of coefficients should match number of basis functions");
 
-  for (const auto & pr : v)
+  for (auto & pr : v)
     {
       dof_id_type elem_id = pr.first;
-      const auto & v_comp_and_qp = pr.second;
+      auto & v_comp_and_qp = pr.second;
 
       for (const auto & comp : index_range(v_comp_and_qp))
         for (unsigned int qp : index_range(v_comp_and_qp[comp]))
@@ -197,7 +197,7 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
               if(qp >= basis_comp_and_qp[comp].size())
                 libmesh_error_msg("Error: Invalid qp");
 
-              v[elem_id][comp][qp] -= coeffs(i) * basis_comp_and_qp[comp][qp];
+              v_comp_and_qp[comp][qp] -= coeffs(i) * basis_comp_and_qp[comp][qp];
             }
     }
 
