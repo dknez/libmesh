@@ -270,7 +270,7 @@ Real RBEIMConstruction::train_eim_approximation()
 
   RBEIMEvaluation & rbe = get_rb_eim_evaluation();
   rbe.initialize_parameters(*this);
-  rbe.resize_data_structures(get_Nmax());    
+  rbe.resize_data_structures(get_Nmax());
 
   // If we are continuing from a previous training run,
   // we might already be at the max number of basis functions.
@@ -564,7 +564,7 @@ void RBEIMConstruction::initialize_qp_data()
                   xyz_perturb(0) += fd_delta;
                   xyz_perturb_vec.emplace_back(xyz_perturb);
                   xyz_perturb(0) -= fd_delta;
-                  
+
                   xyz_perturb(1) += fd_delta;
                   xyz_perturb_vec.emplace_back(xyz_perturb);
                   xyz_perturb(1) -= fd_delta;
