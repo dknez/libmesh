@@ -49,10 +49,14 @@ struct ShiftedGaussian : public RBParametrizedFunction
     return 1;
   }
 
-  std::vector<Number> evaluate(const RBParameters & mu,
-                               const Point & p,
-                               subdomain_id_type /*subdomain_id*/,
-                               const std::vector<Point> & /*p_perturb*/)
+  // Avoid warnings about hidden overloaded virtuals
+  using RBParametrizedFunction::evaluate;
+
+  virtual std::vector<Number>
+  evaluate(const RBParameters & mu,
+           const Point & p,
+           subdomain_id_type /*subdomain_id*/,
+           const std::vector<Point> & /*p_perturb*/) override
   {
     Real center_x = mu.get_value("center_x");
     Real center_y = mu.get_value("center_y");

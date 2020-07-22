@@ -52,10 +52,14 @@ struct Gxyz : public RBParametrizedFunction
     return 3;
   }
 
-  virtual std::vector<Number> evaluate(const RBParameters & mu,
-                                       const Point & p,
-                                       subdomain_id_type /*subdomain_id*/,
-                                       const std::vector<Point> & /*p_perturb*/)
+  // Avoid warnings about hidden overloaded virtuals
+  using RBParametrizedFunction::evaluate;
+
+  virtual std::vector<Number>
+  evaluate(const RBParameters & mu,
+           const Point & p,
+           subdomain_id_type /*subdomain_id*/,
+           const std::vector<Point> & /*p_perturb*/) override
   {
     Real curvature = mu.get_value("curvature");
 
