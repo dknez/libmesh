@@ -481,17 +481,17 @@ void RBConstructionBase<Base>::generate_training_parameters_deterministic(const 
   // than 0) so that we don't skip the inner part of the triply-nested loop over
   // n_training_samples_per_param below.
   std::vector<unsigned int> n_training_samples_per_param(3);
-  for(unsigned int param=0; param<3; param++)
+  for (unsigned int param=0; param<3; param++)
     {
       if (param < num_params)
-          {
-            n_training_samples_per_param[param] =
-              static_cast<unsigned int>( std::round(std::pow(static_cast<Real>(n_training_samples_in), 1./num_params)) );
-          }
-        else
-          {
-            n_training_samples_per_param[param] = 1;
-          }
+        {
+          n_training_samples_per_param[param] =
+            static_cast<unsigned int>( std::round(std::pow(static_cast<Real>(n_training_samples_in), 1./num_params)) );
+        }
+      else
+        {
+          n_training_samples_per_param[param] = 1;
+        }
     }
 
   {
