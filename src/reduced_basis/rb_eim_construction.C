@@ -645,15 +645,8 @@ RBEIMConstruction::inner_product(const QpDataMap & v, const QpDataMap & w)
       dof_id_type elem_id = pr.first;
       const auto & v_comp_and_qp = pr.second;
 
-      auto w_comp_and_qp_it = w.find(elem_id);
-      if(w_comp_and_qp_it == w.end())
-        libmesh_error_msg("Error: elem_id not found");
-      const auto & w_comp_and_qp = w_comp_and_qp_it->second;
-
-      auto _local_quad_point_JxW_it = _local_quad_point_JxW.find(elem_id);
-      if(w_comp_and_qp_it == w.end())
-        libmesh_error_msg("Error: elem_id not found");
-      const auto & JxW = _local_quad_point_JxW_it->second;
+      const auto & w_comp_and_qp = libmesh_map_find(w, elem_id);
+      const auto & JxW = libmesh_map_find(_local_quad_point_JxW, elem_id);
 
       for (const auto & comp : index_range(v_comp_and_qp))
         {
@@ -766,26 +759,25 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
                   optimal_elem_id = elem_id;
                   optimal_qp = qp;
 
-                  auto point_it = _local_quad_point_locations.find(elem_id);
-                  if(point_it == _local_quad_point_locations.end())
-                    libmesh_error_msg("Error: Invalid element ID");
-                  if(qp >= point_it->second.size())
-                    libmesh_error_msg("Error: Invalid qp");
-                  optimal_point = point_it->second[qp];
+                  const auto & point_list =
+                    libmesh_map_find(_local_quad_point_locations, elem_id);
 
-                  auto subdomain_it = _local_quad_point_subdomain_ids.find(elem_id);
-                  if(subdomain_it == _local_quad_point_subdomain_ids.end())
-                    libmesh_error_msg("Error: Invalid element ID");
-                  optimal_subdomain_id = subdomain_it->second;
+                  if (qp >= point_list.size())
+                    libmesh_error_msg("Error: Invalid qp");
+
+                  optimal_point = point_list[qp];
+
+                  optimal_subdomain_id = libmesh_map_find(_local_quad_point_subdomain_ids, elem_id);
 
                   if (get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
                     {
-                      auto point_perturbs_it = _local_quad_point_locations_perturbations.find(elem_id);
-                      if(point_perturbs_it == _local_quad_point_locations_perturbations.end())
-                        libmesh_error_msg("Error: Invalid element ID");
-                      if(qp >= point_perturbs_it->second.size())
+                      const auto & perturb_list =
+                        libmesh_map_find(_local_quad_point_locations_perturbations, elem_id);
+
+                      if (qp >= perturb_list.size())
                         libmesh_error_msg("Error: Invalid qp");
-                      optimal_point_perturbs = point_perturbs_it->second[qp];
+
+                      optimal_point_perturbs = perturb_list[qp];
                     }
                 }
             }
