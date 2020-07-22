@@ -273,7 +273,7 @@ public:
    * Note: this is not a virtual function and is not related to the
    * RBEvaluation function of the same name.
    */
-  void read_in_basis_functions(System & rb_construction,
+  void read_in_basis_functions(const System & sys,
                                const std::string & directory_name = "offline_data",
                                bool read_binary_basis_functions = true);
 

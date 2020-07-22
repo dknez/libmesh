@@ -543,14 +543,14 @@ write_out_basis_functions(const std::string & directory_name,
 }
 
 void RBEIMEvaluation::
-read_in_basis_functions(System & rb_construction,
+read_in_basis_functions(const System & sys,
                         const std::string & directory_name,
                         bool read_binary_basis_functions)
 {
   LOG_SCOPE("read_in_basis_functions()", "RBEIMEvaluation");
 
   // Read values on processor 0 only.
-  if (this->processor_id() == 0)
+  if (sys.comm().rank() == 0)
     {
       // Create filename
       std::ostringstream file_name;
@@ -638,7 +638,7 @@ read_in_basis_functions(System & rb_construction,
     } // end if processor 0
 
   // Distribute the basis function information to the processors that require it
-  this->distribute_bfs(rb_construction);
+  this->distribute_bfs(sys);
 }
 
 void RBEIMEvaluation::print_local_eim_basis_functions() const
