@@ -59,6 +59,11 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
 
   output.clear();
 
+  auto n_comp = get_n_components();
+
+  // Dummy vector to be used when xyz perturbations are not required
+  std::vector<Point> empty_perturbs;
+
   for (const auto & xyz_pair : all_xyz)
     {
       dof_id_type elem_id = xyz_pair.first;
@@ -66,7 +71,16 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
 
       subdomain_id_type subdomain_id = libmesh_map_find(sbd_ids, elem_id);
 
-      std::vector<std::vector<Number>> evaluated_values(xyz_vec.size());
+      // The amount of data to be stored for each component
+      auto n_qp = xyz_vec.size();
+
+      // Get a reference to the array[n_comp][n_qp] of data for this
+      // Elem, and properly resize it.
+      auto & array = output[elem_id];
+      array.resize(n_comp);
+      for (auto comp : index_range(array))
+        array[comp].resize(n_qp);
+
       for (unsigned int qp : index_range(xyz_vec))
         {
           std::vector<Number> evaluated_values_at_qp;
@@ -82,24 +96,12 @@ void RBParametrizedFunction::vectorized_evaluate(const RBParameters & mu,
             }
           else
             {
-              std::vector<Point> empty_perturbs;
               evaluated_values_at_qp = evaluate(mu, xyz_vec[qp], subdomain_id, empty_perturbs);
             }
-          evaluated_values[qp] = evaluated_values_at_qp;
+          // Copy evaluated_values_at_qp into array at position "qp"
+          for (auto comp : make_range(n_comp))
+            array[comp][qp] = evaluated_values_at_qp[comp];
         }
-
-      // The output format uses indexing in the order (comp,qp), not (qp,comp) so
-      // we transpose evaluated_values
-      std::vector<std::vector<Number>> evaluated_values_transposed(get_n_components());
-      for (unsigned int comp=0; comp<get_n_components(); comp++)
-        {
-          evaluated_values_transposed[comp].resize(xyz_vec.size());
-          for (unsigned int qp : index_range(xyz_vec))
-            {
-              evaluated_values_transposed[comp][qp] = evaluated_values[qp][comp];
-            }
-        }
-      output[elem_id] = evaluated_values_transposed;
     }
 }
 
