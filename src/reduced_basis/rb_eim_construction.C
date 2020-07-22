@@ -555,7 +555,7 @@ void RBEIMConstruction::initialize_qp_data()
           for (const Point & xyz_qp : xyz)
             {
               std::vector<Point> xyz_perturb_vec;
-              if(elem->dim() == 3)
+              if (elem->dim() == 3)
                 {
                   Point xyz_perturb = xyz_qp;
 
@@ -571,7 +571,7 @@ void RBEIMConstruction::initialize_qp_data()
                   xyz_perturb_vec.emplace_back(xyz_perturb);
                   xyz_perturb(2) -= fd_delta;
                 }
-              else if(elem->dim() == 2)
+              else if (elem->dim() == 2)
                 {
                   // In this case we assume that we have a 2D element
                   // embedded in 3D space. In this case we have to use
