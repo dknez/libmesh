@@ -673,8 +673,10 @@ void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluation & rb_eim_evaluation,
         const std::vector<Point> & perturbs = rb_eim_evaluation.get_interpolation_points_xyz_perturbations(i);
         auto interpolation_points_list_inner = interpolation_points_list_outer.init(i, perturbs.size());
 
-        for (const Point & perturb : perturbs)
-          add_point_to_builder(perturb, interpolation_points_list_inner[i]);
+        for (unsigned int j : index_range(perturbs))
+          {
+            add_point_to_builder(perturbs[j], interpolation_points_list_inner[j]);
+          }
       }
   }
 }
