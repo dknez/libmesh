@@ -640,10 +640,10 @@ RBEIMConstruction::inner_product(const QpDataMap & v, const QpDataMap & w)
 
   Number val = 0.;
 
-  for (const auto v_it : v)
+  for (const auto & pr : v)
     {
-      dof_id_type elem_id = v_it.first;
-      const auto & v_comp_and_qp = v_it.second;
+      dof_id_type elem_id = pr.first;
+      const auto & v_comp_and_qp = pr.second;
 
       auto w_comp_and_qp_it = w.find(elem_id);
       if(w_comp_and_qp_it == w.end())
@@ -675,9 +675,9 @@ Real RBEIMConstruction::get_max_abs_value(const QpDataMap & v) const
 
   Real max_value = 0.;
 
-  for (const auto v_it : v)
+  for (const auto & pr : v)
     {
-      const auto & v_comp_and_qp = v_it.second;
+      const auto & v_comp_and_qp = pr.second;
 
       for (const auto & comp : index_range(v_comp_and_qp))
         {
@@ -744,10 +744,10 @@ void RBEIMConstruction::enrich_eim_approximation(unsigned int training_index)
   // Initialize largest_abs_value to be negative so that it definitely gets updated.
   Real largest_abs_value = -1.;
 
-  for (const auto local_pf_it : local_pf)
+  for (const auto & pr : local_pf)
     {
-      dof_id_type elem_id = local_pf_it.first;
-      const auto & comp_and_qp = local_pf_it.second;
+      dof_id_type elem_id = pr.first;
+      const auto & comp_and_qp = pr.second;
 
       for (const auto & comp : index_range(comp_and_qp))
         {
@@ -924,9 +924,9 @@ void RBEIMConstruction::scale_parametrized_function(
 {
   LOG_SCOPE("scale_parametrized_function()", "RBEIMConstruction");
 
-  for (auto local_pf_it : local_pf)
+  for (auto & pr : local_pf)
     {
-      auto & comp_and_qp = local_pf_it.second;
+      auto & comp_and_qp = pr.second;
 
       for (unsigned int comp : index_range(comp_and_qp))
         {
