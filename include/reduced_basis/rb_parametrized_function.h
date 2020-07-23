@@ -75,7 +75,7 @@ public:
    * In this case we return the value for component \p comp only, but
    * the base class implementation simply calls the vector-returning
    * evaluate() function below and returns the comp'th component, so
-   * base classes should provide a more efficient routine or just call
+   * derived classes should provide a more efficient routine or just call
    * the vector-returning function instead.
    */
   virtual Number evaluate_comp(const RBParameters & mu,
