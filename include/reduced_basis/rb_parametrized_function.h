@@ -72,13 +72,17 @@ public:
    * parameter \p mu.  If requires_xyz_perturbations==false, then
    * xyz_perturb will not be used.
    *
-   * In this case we return the value for component \p comp only.
+   * In this case we return the value for component \p comp only, but
+   * the base class implementation simply calls the vector-returning
+   * evaluate() function below and returns the comp'th component, so
+   * base classes should provide a more efficient routine or just call
+   * the vector-returning function instead.
    */
-  virtual Number evaluate(const RBParameters & mu,
-                          unsigned int comp,
-                          const Point & xyz,
-                          subdomain_id_type subdomain_id,
-                          const std::vector<Point> & xyz_perturb);
+  virtual Number evaluate_comp(const RBParameters & mu,
+                               unsigned int comp,
+                               const Point & xyz,
+                               subdomain_id_type subdomain_id,
+                               const std::vector<Point> & xyz_perturb);
 
   /**
    * Evaluate the parametrized function at the specified point for

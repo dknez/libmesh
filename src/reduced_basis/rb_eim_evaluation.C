@@ -105,11 +105,12 @@ Real RBEIMEvaluation::rb_eim_solve(unsigned int N)
   DenseVector<Number> EIM_rhs(N);
   for (unsigned int i=0; i<N; i++)
     {
-      EIM_rhs(i) = get_parametrized_function().evaluate(get_parameters(),
-                                                        _interpolation_points_comp[i],
-                                                        _interpolation_points_xyz[i],
-                                                        _interpolation_points_subdomain_id[i],
-                                                        _interpolation_points_xyz_perturbations[i]);
+      EIM_rhs(i) =
+        get_parametrized_function().evaluate_comp(get_parameters(),
+                                                  _interpolation_points_comp[i],
+                                                  _interpolation_points_xyz[i],
+                                                  _interpolation_points_subdomain_id[i],
+                                                  _interpolation_points_xyz_perturbations[i]);
     }
 
   DenseMatrix<Number> interpolation_matrix_N;
@@ -124,11 +125,12 @@ Real RBEIMEvaluation::rb_eim_solve(unsigned int N)
     {
       // Compute the a posteriori error bound
       // First, sample the parametrized function at x_{N+1}
-      Number g_at_next_x = get_parametrized_function().evaluate(get_parameters(),
-                                                        _interpolation_points_comp[N],
-                                                        _interpolation_points_xyz[N],
-                                                        _interpolation_points_subdomain_id[N],
-                                                        _interpolation_points_xyz_perturbations[N]);
+      Number g_at_next_x =
+        get_parametrized_function().evaluate_comp(get_parameters(),
+                                                  _interpolation_points_comp[N],
+                                                  _interpolation_points_xyz[N],
+                                                  _interpolation_points_subdomain_id[N],
+                                                  _interpolation_points_xyz_perturbations[N]);
 
       // Next, evaluate the EIM approximation at x_{N+1}
       Number EIM_approx_at_next_x = 0.;

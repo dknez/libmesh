@@ -35,11 +35,12 @@ fd_delta(1.e-6)
 
 RBParametrizedFunction::~RBParametrizedFunction() = default;
 
-Number RBParametrizedFunction::evaluate(const RBParameters & mu,
-                                        unsigned int comp,
-                                        const Point & xyz,
-                                        subdomain_id_type subdomain_id,
-                                        const std::vector<Point> & xyz_perturb)
+Number
+RBParametrizedFunction::evaluate_comp(const RBParameters & mu,
+                                      unsigned int comp,
+                                      const Point & xyz,
+                                      subdomain_id_type subdomain_id,
+                                      const std::vector<Point> & xyz_perturb)
 {
   std::vector<Number> values = evaluate(mu, xyz, subdomain_id, xyz_perturb);
 
