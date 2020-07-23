@@ -343,15 +343,22 @@ Real RBEIMConstruction::train_eim_approximation()
             break;
           }
 
-        for (auto & param : greedy_param_list)
-          if (param == get_parameters())
-            {
-              libMesh::out << "Exiting greedy because the same parameters were selected twice"
-                           << std::endl;
-              break;
-            }
+        {
+          bool do_exit = false;
+          for (auto & param : greedy_param_list)
+            if (param == get_parameters())
+              {
+                libMesh::out << "Exiting greedy because the same parameters were selected twice"
+                             << std::endl;
+                do_exit = true;
+                break;
+              }
+
+          if (do_exit)
+            break; // out of while
+        }
       }
-    }
+    } // end while(true)
 
   return abs_greedy_error;
 }
