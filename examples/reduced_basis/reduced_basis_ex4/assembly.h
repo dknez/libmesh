@@ -49,9 +49,6 @@ struct ShiftedGaussian : public RBParametrizedFunction
     return 1;
   }
 
-  // Avoid warnings about hidden overloaded virtuals
-  using RBParametrizedFunction::evaluate;
-
   virtual std::vector<Number>
   evaluate(const RBParameters & mu,
            const Point & p,

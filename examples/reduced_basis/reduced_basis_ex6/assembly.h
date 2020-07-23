@@ -52,9 +52,6 @@ struct Gxyz : public RBParametrizedFunction
     return 3;
   }
 
-  // Avoid warnings about hidden overloaded virtuals
-  using RBParametrizedFunction::evaluate;
-
   virtual std::vector<Number>
   evaluate(const RBParameters & mu,
            const Point & p,
