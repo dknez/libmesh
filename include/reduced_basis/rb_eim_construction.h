@@ -243,6 +243,16 @@ private:
   void initialize_qp_data();
 
   /**
+   * Handle the case when we're using an INTERIOR mesh region.
+   */
+  void initialize_qp_data_interior();
+
+  /**
+   * Handle the case when we're using a SIDE mesh region.
+   */
+  void initialize_qp_data_side();
+
+  /**
    * Initialize the \p elem_ids and \p sbd_ids associated with the observation
    * points so that we can subsequently evaluate parametrized functions at the
    * observations points.
@@ -375,6 +385,28 @@ private:
    * to the mapping function derivatives.
    */
   std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > _local_quad_point_locations_perturbations;
+
+  /**
+   * The quadrature point locations, quadrature point weights (JxW), and boundary IDs
+   * for elements on this processor.
+   *
+   * The indexing is as follows:
+   *   (element ID, side index) --> quadrature point --> xyz
+   *   (element ID, side index) --> quadrature point --> JxW
+   *   (element ID, side index) --> boundary ID
+   * We use a map to index the element ID, since the IDs on this processor in
+   * generally will not start at zero.
+   */
+  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point> > _local_boundary_quad_point_locations;
+  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Real> > _local_boundary_quad_point_JxW;
+  std::unordered_map<std::pair<dof_id_type,unsigned int>, boundary_id_type > _local_boundary_quad_point_boundary_ids;
+
+  /**
+   * Analogous to _local_quad_point_locations_perturbations, except for the case
+   * of EIM applied to mesh boundaries.
+   */
+  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> >
+    _local_boundary_quad_point_locations_perturbations;
 
   /**
    * We also optionally store the values at the "observation points" for all parametrized functions

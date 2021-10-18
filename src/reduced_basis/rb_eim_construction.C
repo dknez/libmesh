@@ -760,6 +760,21 @@ void RBEIMConstruction::initialize_qp_data()
 {
   LOG_SCOPE("initialize_qp_data()", "RBEIMConstruction");
 
+  if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::INTERIOR)
+    initialize_qp_data_elem_interior();
+  else if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::SIDE)
+    initialize_qp_data_elem_side();
+  else if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::NODE)
+    libmesh_error_msg("EIM region for nodes is not supported yet");
+  else
+    libmesh_error_msg("Unrecognized parametrized function type: " <<
+                      get_rb_eim_evaluation().get_parametrized_function().mesh_region());
+}
+
+void RBEIMConstruction::initialize_qp_data_interior()
+{
+  LOG_SCOPE("initialize_qp_data_interior()", "RBEIMConstruction");
+
   if (!get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
     {
       libMesh::out << "Initializing quadrature point locations" << std::endl;
@@ -769,7 +784,6 @@ void RBEIMConstruction::initialize_qp_data()
       libMesh::out << "Initializing quadrature point and perturbation locations" << std::endl;
     }
 
-  // Compute truth representation via L2 projection
   const MeshBase & mesh = this->get_mesh();
 
   FEMContext context(*this);
@@ -796,6 +810,140 @@ void RBEIMConstruction::initialize_qp_data()
       _local_quad_point_locations[elem_id] = xyz;
       _local_quad_point_JxW[elem_id] = JxW;
       _local_quad_point_subdomain_ids[elem_id] = elem->subdomain_id();
+
+      if (get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
+        {
+          Real fd_delta = get_rb_eim_evaluation().get_parametrized_function().fd_delta;
+
+          std::vector<std::vector<Point>> xyz_perturb_vec_at_qps;
+
+          for (const Point & xyz_qp : xyz)
+            {
+              std::vector<Point> xyz_perturb_vec;
+              if (elem->dim() == 3)
+                {
+                  Point xyz_perturb = xyz_qp;
+
+                  xyz_perturb(0) += fd_delta;
+                  xyz_perturb_vec.emplace_back(xyz_perturb);
+                  xyz_perturb(0) -= fd_delta;
+
+                  xyz_perturb(1) += fd_delta;
+                  xyz_perturb_vec.emplace_back(xyz_perturb);
+                  xyz_perturb(1) -= fd_delta;
+
+                  xyz_perturb(2) += fd_delta;
+                  xyz_perturb_vec.emplace_back(xyz_perturb);
+                  xyz_perturb(2) -= fd_delta;
+                }
+              else if (elem->dim() == 2)
+                {
+                  // In this case we assume that we have a 2D element
+                  // embedded in 3D space. In this case we have to use
+                  // the following approach to perturb xyz:
+                  //  1) inverse map xyz to the reference element
+                  //  2) perturb on the reference element in the (xi,eta) "directions"
+                  //  3) map the perturbed points back to the physical element
+                  // This approach is necessary to ensure that the perturbed points
+                  // are still in the element.
+
+                  Point xi_eta =
+                    FEMap::inverse_map(elem->dim(),
+                                      elem,
+                                      xyz_qp,
+                                      /*Newton iteration tolerance*/ TOLERANCE,
+                                      /*secure*/ true);
+
+                  // Inverse map should map back to a 2D reference domain
+                  libmesh_assert(std::abs(xi_eta(2)) < TOLERANCE);
+
+                  Point xi_eta_perturb = xi_eta;
+
+                  xi_eta_perturb(0) += fd_delta;
+                  Point xyz_perturb_0 =
+                    FEMap::map(elem->dim(),
+                               elem,
+                               xi_eta_perturb);
+                  xi_eta_perturb(0) -= fd_delta;
+
+                  xi_eta_perturb(1) += fd_delta;
+                  Point xyz_perturb_1 =
+                    FEMap::map(elem->dim(),
+                               elem,
+                               xi_eta_perturb);
+                  xi_eta_perturb(1) -= fd_delta;
+
+                  // Finally, we rescale xyz_perturb_0 and xyz_perturb_1 so that
+                  // (xyz_perturb - xyz_qp).norm() == fd_delta, since this is
+                  // required in order to compute finite differences correctly.
+                  Point unit_0 = (xyz_perturb_0-xyz_qp).unit();
+                  Point unit_1 = (xyz_perturb_1-xyz_qp).unit();
+
+                  xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_0);
+                  xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_1);
+                }
+              else
+                {
+                  // We current do nothing in the dim=1 case since
+                  // we have no need for this capability so far.
+                  // Support for this case could be added if it is
+                  // needed.
+                }
+
+              xyz_perturb_vec_at_qps.emplace_back(xyz_perturb_vec);
+            }
+
+          _local_quad_point_locations_perturbations[elem_id] = xyz_perturb_vec_at_qps;
+        }
+    }
+}
+
+void RBEIMConstruction::initialize_qp_data_side()
+{
+  LOG_SCOPE("initialize_qp_data_side()", "RBEIMConstruction");
+
+  if (!get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
+    {
+      libMesh::out << "Initializing quadrature point locations" << std::endl;
+    }
+  else
+    {
+      libMesh::out << "Initializing quadrature point and perturbation locations" << std::endl;
+    }
+
+  const std::set<boundary_id_type> & parametrized_function_boundary_ids =
+    get_rb_eim_evaluation().get_parametrized_function().get_parametrized_function_boundary_ids();
+  libmesh_error_msg_if (parametrized_function_boundary_ids.empty(),
+                        "Need to have non-empty boundary IDs to initialize side data");
+
+  const MeshBase & mesh = this->get_mesh();
+
+  FEMContext context(*this);
+  init_context(context);
+
+  FEBase * elem_fe = nullptr;
+  context.get_element_fe( 0, elem_fe );
+  const std::vector<Real> & JxW = elem_fe->get_JxW();
+  const std::vector<Point> & xyz = elem_fe->get_xyz();
+
+  _local_boundary_quad_point_locations.clear();
+  _local_boundary_quad_point_boundary_ids.clear();
+  _local_boundary_quad_point_JxW.clear();
+
+  _local_boundary_quad_point_locations_perturbations.clear();
+
+  UPDATE THE CODE BELOW...
+
+  for (const auto & elem : mesh.active_local_element_ptr_range())
+    {
+      dof_id_type elem_id = elem->id();
+
+      context.pre_fe_reinit(*this, elem);
+      context.elem_fe_reinit();
+
+      _local_quad_point_locations[elem_id] = xyz;
+      _local_quad_point_JxW[elem_id] = JxW;
+      _local_boundary_quad_point_boundary_ids[elem_id] = elem->subdomain_id();
 
       if (get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
         {

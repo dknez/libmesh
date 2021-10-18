@@ -35,7 +35,8 @@ RBParametrizedFunction::RBParametrizedFunction()
 :
 requires_xyz_perturbations(false),
 is_lookup_table(false),
-fd_delta(1.e-6)
+fd_delta(1.e-6),
+_mesh_region(INTERIOR)
 {}
 
 RBParametrizedFunction::~RBParametrizedFunction() = default;
@@ -218,6 +219,130 @@ Number RBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned int co
   return preevaluated_values[0][index][comp];
 }
 
+void RBParametrizedFunction::boundary_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                          const std::vector<Point> & all_xyz,
+                                                          const std::vector<dof_id_type> & elem_ids,
+                                                          const std::vector<unsigned int> & qps,
+                                                          const std::vector<boundary_id_type> & boundary_ids,
+                                                          const std::vector<subdomain_id_type> & sbd_ids,
+                                                          const std::vector<std::vector<Point>> & all_xyz_perturb,
+                                                          const std::vector<std::vector<Real>> & phi_i_qp,
+                                                          std::vector<std::vector<std::vector<Number>>> & output)
+{
+  libmesh_error_msg("Boundary version of vectorized_evaluate() should be implemented in subclasses of RBParametrizedFunction");
+}
+
+void RBParametrizedFunction::preevaluate_parametrized_function_on_boundary(const RBParameters & mu,
+                                                                           const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
+                                                                           const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
+                                                                           const std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                                           const System & sys)
+{
+  mesh_to_preevaluated_values_map.clear();
+
+  unsigned int n_points = 0;
+  for (const auto & xyz_pair : all_xyz)
+  {
+    const std::vector<Point> & xyz_vec = xyz_pair.second;
+    n_points += xyz_vec.size();
+  }
+
+  std::vector<Point> all_xyz_vec(n_points);
+  std::vector<dof_id_type> elem_ids_vec(n_points);
+  std::vector<unsigned int> qps_vec(n_points);
+  std::vector<subdomain_id_type> sbd_ids_vec(n_points);
+  std::vector<std::vector<Point>> all_xyz_perturb_vec(n_points);
+  std::vector<std::vector<Real>> phi_i_qp_vec(n_points);
+
+  // Empty vector to be used when xyz perturbations are not required
+  std::vector<Point> empty_perturbs;
+
+  // In order to compute phi_i_qp, we initialize a FEMContext
+  FEMContext con(sys);
+  for (auto dim : con.elem_dimensions())
+    {
+      auto fe = con.get_element_fe(/*var=*/0, dim);
+      fe->get_phi();
+    }
+
+  unsigned int counter = 0;
+  for (const auto & xyz_pair : all_xyz)
+    {
+      dof_id_type elem_id = xyz_pair.first;
+      const std::vector<Point> & xyz_vec = xyz_pair.second;
+
+      subdomain_id_type subdomain_id = libmesh_map_find(sbd_ids, elem_id);
+
+      // The amount of data to be stored for each component
+      auto n_qp = xyz_vec.size();
+      mesh_to_preevaluated_values_map[elem_id].resize(n_qp);
+
+      // Also initialize phi in order to compute phi_i_qp
+      const Elem & elem_ref = sys.get_mesh().elem_ref(elem_id);
+      con.pre_fe_reinit(sys, &elem_ref);
+
+      auto elem_fe = con.get_element_fe(/*var=*/0, elem_ref.dim());
+      const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
+
+      elem_fe->reinit(&elem_ref);
+
+      for (auto qp : index_range(xyz_vec))
+        {
+          mesh_to_preevaluated_values_map[elem_id][qp] = counter;
+
+          all_xyz_vec[counter] = xyz_vec[qp];
+          elem_ids_vec[counter] = elem_id;
+          qps_vec[counter] = qp;
+          sbd_ids_vec[counter] = subdomain_id;
+
+          phi_i_qp_vec[counter].resize(phi.size());
+          for(auto i : index_range(phi))
+            phi_i_qp_vec[counter][i] = phi[i][qp];
+
+          if (requires_xyz_perturbations)
+            {
+              const auto & qps_and_perturbs =
+                libmesh_map_find(all_xyz_perturb, elem_id);
+              libmesh_error_msg_if(qp >= qps_and_perturbs.size(), "Error: Invalid qp");
+
+              all_xyz_perturb_vec[counter] = qps_and_perturbs[qp];
+            }
+          else
+            {
+              all_xyz_perturb_vec[counter] = empty_perturbs;
+            }
+
+          counter++;
+        }
+    }
+
+  std::vector<RBParameters> mus {mu};
+  vectorized_evaluate(mus,
+                      all_xyz_vec,
+                      elem_ids_vec,
+                      qps_vec,
+                      sbd_ids_vec,
+                      all_xyz_perturb_vec,
+                      phi_i_qp_vec,
+                      preevaluated_values);
+}
+
+Number RBParametrizedFunction::lookup_preevaluated_value_on_boundary(unsigned int comp,
+                                                                     dof_id_type elem_id,
+                                                                     unsigned int qp) const
+{
+  const std::vector<unsigned int> & indices_at_qps =
+    libmesh_map_find(mesh_to_preevaluated_values_map, elem_id);
+
+  libmesh_error_msg_if(qp >= indices_at_qps.size(), "Error: invalid qp");
+
+  unsigned int index = indices_at_qps[qp];
+  libmesh_error_msg_if(preevaluated_values.size() != 1, "Error: we expect only one parameter index");
+  libmesh_error_msg_if(index >= preevaluated_values[0].size(), "Error: invalid index");
+
+  return preevaluated_values[0][index][comp];
+}
+
 void RBParametrizedFunction::initialize_lookup_table()
 {
   // No-op by default, override in subclasses as needed
@@ -293,6 +418,16 @@ std::vector<std::vector<Number>> RBParametrizedFunction::evaluate_at_observation
                       obs_pt_values);
 
   return obs_pt_values[0];
+}
+
+MeshRegion RBParametrizedFunction::mesh_region() const
+{
+  return _mesh_region;
+}
+
+const std::set<boundary_id_type> & RBParametrizedFunction::get_parametrized_function_boundary_ids() const
+{
+  return _parametrized_function_boundary_ids;
 }
 
 }

@@ -46,6 +46,12 @@ class RBParametrizedFunction
 {
 public:
 
+  enum MeshRegion {
+    INTERIOR,
+    SIDE,
+    NODE
+  };
+
   /**
    * Constructor.
    */
@@ -136,6 +142,37 @@ public:
                                                    unsigned int qp) const;
 
   /**
+   * Analogous to vectorized_evaluate(), except for boundary data such as surface loads.
+   */
+  virtual void boundary_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                            const std::vector<Point> & all_xyz,
+                                            const std::vector<dof_id_type> & elem_ids,
+                                            const std::vector<unsigned int> & qps,
+                                            const std::vector<boundary_id_type> & boundary_ids,
+                                            const std::vector<subdomain_id_type> & sbd_ids,
+                                            const std::vector<std::vector<Point>> & all_xyz_perturb,
+                                            const std::vector<std::vector<Real>> & phi_i_qp,
+                                            std::vector<std::vector<std::vector<Number>>> & output);
+
+  /**
+   * Analogous to preevaluate_parametrized_function_on_mesh(), except for boundary data
+   * such as surface loads.
+   */
+  virtual void preevaluate_parametrized_function_on_boundary(const RBParameters & mu,
+                                                             const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
+                                                             const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
+                                                             const std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                             const System & sys);
+
+  /**
+   * Analogous to lookup_preevaluated_value_on_mesh(), except for boundary data
+   * such as surface loads.
+   */
+  virtual Number lookup_preevaluated_value_on_boundary(unsigned int comp,
+                                                       dof_id_type elem_id,
+                                                       unsigned int qp) const;
+
+  /**
    * If this parametrized function is defined based on a lookup table then
    * we can call this function to initialize the table. This is a no-op by
    * default, but it can be overridden in subclasses as needed.
@@ -163,6 +200,18 @@ public:
                                                                           const System & sys);
 
   /**
+   * Get the MeshRegion that this parametrized function is defined on.
+   */
+  MeshRegion mesh_region() const;
+
+  /**
+   * Get the boundary IDs on which this parametrized function is defined.
+   * In the case that we're not using mesh_region() == SIDE, then this
+   * should return an empty set.
+   */
+  const std::set<boundary_id_type> & get_parametrized_function_boundary_ids() const;
+
+  /**
    * Storage for pre-evaluated values. The indexing is given by:
    *   parameter index --> point index --> component index --> value.
    */
@@ -177,6 +226,22 @@ public:
    * that point.
    */
   std::unordered_map<dof_id_type, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
+
+  /**
+   * Storage for pre-evaluated boundary values. The indexing is given by:
+   *   parameter index --> point index --> component index --> value.
+   */
+  std::vector<std::vector<std::vector<Number>>> preevaluated_boundary_values;
+
+  /**
+   * Indexing into preevaluated_boundary_values for the case where the preevaluated values
+   * were obtained from evaluations at elements/quadrature points on a mesh.
+   * The indexing here is:
+   *   elem_id --> qp --> point_index
+   * Then preevaluated_values[0][point_index] provides the vector of component values at
+   * that point.
+   */
+  std::unordered_map<dof_id_type, std::vector<unsigned int>> mesh_to_preevaluated_boundary_values_map;
 
   /**
    * Boolean to indicate whether this parametrized function requires xyz perturbations
@@ -215,6 +280,19 @@ protected:
    * We index this data by "property name" --> subdomain_id --> value.
    */
   std::map<std::string, std::map<subdomain_id_type, Number>> _parameter_independent_data;
+
+  /**
+   * Define the MeshRegion that this parametrized function is defined on, e.g. either
+   * element interiors, element sides, or nodes.
+   */
+  MeshRegion _mesh_region;
+
+  /**
+   * In the case that we're using a SIDE mesh region, we need to define
+   * the boundary IDs on which the parametrized function is defined.
+   */
+  std::set<boundary_id_type> _parametrized_function_boundary_ids;
+
 };
 
 }
