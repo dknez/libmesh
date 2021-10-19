@@ -25,7 +25,6 @@
 #include "libmesh/rb_parametrized_function_base.h"
 
 // C++ includes
-#include <unordered_map>
 #include <vector>
 #include <map>
 
@@ -116,9 +115,9 @@ public:
    * sample. If requires_xyz_perturbations==false, then all_xyz_perturb will not be used.
    */
   virtual void preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
-                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
-                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, boundary_id_type> & boundary_ids,
-                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                         const std::map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
+                                                         const std::map<std::pair<dof_id_type,unsigned int>, boundary_id_type> & boundary_ids,
+                                                         const std::map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
                                                          const System & sys);
 
   /**
@@ -143,8 +142,11 @@ public:
    *   (elem_id,side index) --> qp --> point_index
    * Then preevaluated_values[0][point_index] provides the vector of component values at
    * that point.
+   *
+   * Note that we use a map here instead of unordered_map since the standard library
+   * does not provide a default implementation of std::hash for pairs.
    */
-  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
+  std::map<std::pair<dof_id_type,unsigned int>, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
 
 };
 

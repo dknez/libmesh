@@ -103,9 +103,9 @@ void SideRBParametrizedFunction::vectorized_evaluate(const std::vector<RBParamet
 }
 
 void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
-                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
-                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, subdomain_id_type> & boundary_ids,
-                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                                           const std::map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
+                                                                           const std::map<std::pair<dof_id_type,unsigned int>, subdomain_id_type> & boundary_ids,
+                                                                           const std::map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
                                                                            const System & sys)
 {
   mesh_to_preevaluated_values_map.clear();
@@ -135,7 +135,7 @@ void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const
       auto fe = con.get_element_fe(/*var=*/0, dim);
       fe->get_phi();
 
-      auto side_fe = c.get_side_fe(/*var=*/0, dim);
+      auto side_fe = con.get_side_fe(/*var=*/0, dim);
       side_fe->get_phi();
     }
 
