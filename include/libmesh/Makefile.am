@@ -331,11 +331,13 @@ BUILT_SOURCES = \
         rb_parameters.h \
         rb_parametrized.h \
         rb_parametrized_function.h \
+        rb_parametrized_function_base.h \
         rb_scm_construction.h \
         rb_scm_evaluation.h \
         rb_temporal_discretization.h \
         rb_theta.h \
         rb_theta_expansion.h \
+        side_rb_parametrized_function.h \
         transient_rb_assembly_expansion.h \
         transient_rb_construction.h \
         transient_rb_evaluation.h \
@@ -1544,6 +1546,9 @@ rb_parametrized.h: $(top_srcdir)/include/reduced_basis/rb_parametrized.h
 rb_parametrized_function.h: $(top_srcdir)/include/reduced_basis/rb_parametrized_function.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
+rb_parametrized_function_base.h: $(top_srcdir)/include/reduced_basis/rb_parametrized_function_base.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
 rb_scm_construction.h: $(top_srcdir)/include/reduced_basis/rb_scm_construction.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
@@ -1557,6 +1562,9 @@ rb_theta.h: $(top_srcdir)/include/reduced_basis/rb_theta.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_theta_expansion.h: $(top_srcdir)/include/reduced_basis/rb_theta_expansion.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
+side_rb_parametrized_function.h: $(top_srcdir)/include/reduced_basis/side_rb_parametrized_function.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 transient_rb_assembly_expansion.h: $(top_srcdir)/include/reduced_basis/transient_rb_assembly_expansion.h
