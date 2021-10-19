@@ -18,7 +18,7 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // libmesh includes
-#include "libmesh/rb_parametrized_function.h"
+#include "libmesh/side_rb_parametrized_function.h"
 #include "libmesh/int_range.h"
 #include "libmesh/point.h"
 #include "libmesh/libmesh_logging.h"
@@ -32,37 +32,39 @@ namespace libMesh
 {
 
 Number
-RBParametrizedFunction::evaluate_comp(const RBParameters & mu,
-                                      unsigned int comp,
-                                      const Point & xyz,
-                                      dof_id_type elem_id,
-                                      unsigned int qp,
-                                      subdomain_id_type subdomain_id,
-                                      const std::vector<Point> & xyz_perturb,
-                                      const std::vector<Real> & phi_i_qp)
+SideRBParametrizedFunction::evaluate_comp(const RBParameters & mu,
+                                          unsigned int comp,
+                                          const Point & xyz,
+                                          dof_id_type elem_id,
+                                          unsigned int side_index,
+                                          unsigned int qp,
+                                          boundary_id_type boundary_id,
+                                          const std::vector<Point> & xyz_perturb,
+                                          const std::vector<Real> & phi_i_qp)
 {
-  std::vector<Number> values = evaluate(mu, xyz, elem_id, qp, subdomain_id, xyz_perturb, phi_i_qp);
+  std::vector<Number> values = evaluate(mu, xyz, elem_id, side_index, qp, boundary_id, xyz_perturb, phi_i_qp);
 
   libmesh_error_msg_if(comp >= values.size(), "Error: Invalid value of comp");
 
   return values[comp];
 }
 
-void RBParametrizedFunction::vectorized_evaluate(const std::vector<RBParameters> & mus,
-                                                 const std::vector<Point> & all_xyz,
-                                                 const std::vector<dof_id_type> & elem_ids,
-                                                 const std::vector<unsigned int> & qps,
-                                                 const std::vector<subdomain_id_type> & sbd_ids,
-                                                 const std::vector<std::vector<Point>> & all_xyz_perturb,
-                                                 const std::vector<std::vector<Real>> & phi_i_qp,
-                                                 std::vector<std::vector<std::vector<Number>>> & output)
+void SideRBParametrizedFunction::vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                     const std::vector<Point> & all_xyz,
+                                                     const std::vector<dof_id_type> & elem_ids,
+                                                     const std::vector<unsigned int> & side_indices,
+                                                     const std::vector<unsigned int> & qps,
+                                                     const std::vector<boundary_id_type> & boundary_ids,
+                                                     const std::vector<std::vector<Point>> & all_xyz_perturb,
+                                                     const std::vector<std::vector<Real>> & phi_i_qp,
+                                                     std::vector<std::vector<std::vector<Number>>> & output)
 {
-  LOG_SCOPE("vectorized_evaluate()", "RBParametrizedFunction");
+  LOG_SCOPE("vectorized_evaluate()", "SideRBParametrizedFunction");
 
   output.clear();
   unsigned int n_points = all_xyz.size();
 
-  libmesh_error_msg_if(sbd_ids.size() != n_points, "Error: invalid vector sizes");
+  libmesh_error_msg_if(boundary_ids.size() != n_points, "Error: invalid vector sizes");
   libmesh_error_msg_if(requires_xyz_perturbations && (all_xyz_perturb.size() != n_points), "Error: invalid vector sizes");
 
   // Dummy vector to be used when xyz perturbations are not required
@@ -79,8 +81,9 @@ void RBParametrizedFunction::vectorized_evaluate(const std::vector<RBParameters>
               output[mu_index][point_index] = evaluate(mus[mu_index],
                                                        all_xyz[point_index],
                                                        elem_ids[point_index],
+                                                       side_indices[point_index],
                                                        qps[point_index],
-                                                       sbd_ids[point_index],
+                                                       boundary_ids[point_index],
                                                        all_xyz_perturb[point_index],
                                                        phi_i_qp[point_index]);
             }
@@ -89,8 +92,9 @@ void RBParametrizedFunction::vectorized_evaluate(const std::vector<RBParameters>
               output[mu_index][point_index] = evaluate(mus[mu_index],
                                                        all_xyz[point_index],
                                                        elem_ids[point_index],
+                                                       side_indices[point_index],
                                                        qps[point_index],
-                                                       sbd_ids[point_index],
+                                                       boundary_ids[point_index],
                                                        empty_perturbs,
                                                        phi_i_qp[point_index]);
             }
@@ -98,11 +102,11 @@ void RBParametrizedFunction::vectorized_evaluate(const std::vector<RBParameters>
     }
 }
 
-void RBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
-                                                                       const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
-                                                                       const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
-                                                                       const std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > & all_xyz_perturb,
-                                                                       const System & sys)
+void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
+                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
+                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, subdomain_id_type> & sbd_ids,
+                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                                           const System & sys)
 {
   mesh_to_preevaluated_values_map.clear();
 
@@ -115,8 +119,9 @@ void RBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBP
 
   std::vector<Point> all_xyz_vec(n_points);
   std::vector<dof_id_type> elem_ids_vec(n_points);
+  std::vector<unsigned int> side_indices_vec(n_points);
   std::vector<unsigned int> qps_vec(n_points);
-  std::vector<subdomain_id_type> sbd_ids_vec(n_points);
+  std::vector<boundary_id_type> boundary_ids_vec(n_points);
   std::vector<std::vector<Point>> all_xyz_perturb_vec(n_points);
   std::vector<std::vector<Real>> phi_i_qp_vec(n_points);
 
@@ -193,7 +198,7 @@ void RBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBP
                       preevaluated_values);
 }
 
-Number RBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned int comp,
+Number SideRBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned int comp,
                                                                  dof_id_type elem_id,
                                                                  unsigned int qp) const
 {
@@ -209,7 +214,7 @@ Number RBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned int co
   return preevaluated_values[0][index][comp];
 }
 
-std::vector<std::vector<Number>> RBParametrizedFunction::evaluate_at_observation_points(const RBParameters & mu,
+std::vector<std::vector<Number>> SideRBParametrizedFunction::evaluate_at_observation_points(const RBParameters & mu,
                                                                                         const std::vector<Point> & observation_points,
                                                                                         const std::vector<dof_id_type> & elem_ids,
                                                                                         const std::vector<subdomain_id_type> & sbd_ids,

@@ -17,8 +17,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#ifndef LIBMESH_RB_PARAMETRIZED_FUNCTION_H
-#define LIBMESH_RB_PARAMETRIZED_FUNCTION_H
+#ifndef LIBMESH_SIDE_RB_PARAMETRIZED_FUNCTION_H
+#define LIBMESH_SIDE_RB_PARAMETRIZED_FUNCTION_H
 
 // libMesh includes
 #include "libmesh/libmesh_common.h"
@@ -38,27 +38,27 @@ class System;
 
 /**
  * A simple functor class that provides a RBParameter-dependent function.
- * This function is defined on element interiors.
+ * This function is defined on element sides.
  */
-class RBParametrizedFunction : public RBParametrizedFunctionBase
+class SideRBParametrizedFunction : public RBParametrizedFunctionBase
 {
 public:
 
   /**
    * Constructor.
    */
-  RBParametrizedFunction() = default;
+  SideRBParametrizedFunction() = default;
 
   /**
    * Special functions.
    * - This class can be default copy/move assigned/constructed.
    * - The destructor is defaulted out-of-line.
    */
-  RBParametrizedFunction (RBParametrizedFunction &&) = default;
-  RBParametrizedFunction (const RBParametrizedFunction &) = default;
-  RBParametrizedFunction & operator= (const RBParametrizedFunction &) = default;
-  RBParametrizedFunction & operator= (RBParametrizedFunction &&) = default;
-  virtual ~RBParametrizedFunction() = default;
+  SideRBParametrizedFunction (SideRBParametrizedFunction &&) = default;
+  SideRBParametrizedFunction (const SideRBParametrizedFunction &) = default;
+  SideRBParametrizedFunction & operator= (const SideRBParametrizedFunction &) = default;
+  SideRBParametrizedFunction & operator= (SideRBParametrizedFunction &&) = default;
+  virtual ~SideRBParametrizedFunction() = default;
 
   /**
    * Evaluate the parametrized function at the specified point for
@@ -75,8 +75,9 @@ public:
                                unsigned int comp,
                                const Point & xyz,
                                dof_id_type elem_id,
+                               unsigned int side_index,
                                unsigned int qp,
-                               subdomain_id_type subdomain_id,
+                               boundary_id_type boundary_id,
                                const std::vector<Point> & xyz_perturb,
                                const std::vector<Real> & phi_i_qp);
 
@@ -90,8 +91,9 @@ public:
   virtual std::vector<Number> evaluate(const RBParameters & mu,
                                        const Point & xyz,
                                        dof_id_type elem_id,
+                                       unsigned int side_index,
                                        unsigned int qp,
-                                       subdomain_id_type subdomain_id,
+                                       boundary_id_type boundary_id,
                                        const std::vector<Point> & xyz_perturb,
                                        const std::vector<Real> & phi_i_qp) = 0;
 
@@ -101,8 +103,9 @@ public:
   virtual void vectorized_evaluate(const std::vector<RBParameters> & mus,
                                    const std::vector<Point> & all_xyz,
                                    const std::vector<dof_id_type> & elem_ids,
+                                   const std::vector<unsigned int> & side_indices,
                                    const std::vector<unsigned int> & qps,
-                                   const std::vector<subdomain_id_type> & sbd_ids,
+                                   const std::vector<boundary_id_type> & boundary_ids,
                                    const std::vector<std::vector<Point>> & all_xyz_perturb,
                                    const std::vector<std::vector<Real>> & phi_i_qp,
                                    std::vector<std::vector<std::vector<Number>>> & output);
@@ -113,9 +116,9 @@ public:
    * sample. If requires_xyz_perturbations==false, then all_xyz_perturb will not be used.
    */
   virtual void preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
-                                                         const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
-                                                         const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
-                                                         const std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
+                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, boundary_id_type> & boundary_ids,
+                                                         const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
                                                          const System & sys);
 
   /**
@@ -124,20 +127,8 @@ public:
    */
   virtual Number lookup_preevaluated_value_on_mesh(unsigned int comp,
                                                    dof_id_type elem_id,
+                                                   unsigned int side_index,
                                                    unsigned int qp) const;
-
-  /**
-   * Evaluate the parametrized function for the parameter \p mu at the set of
-   * \p observation_points. We return a vector of values at each observation
-   * point since we may want to evaluate more than one component of the
-   * parametrized function. We also provide \p elem_ids and \p sbd_ids
-   * since that info can be required for the evaluation in some cases.
-   */
-  virtual std::vector<std::vector<Number>> evaluate_at_observation_points(const RBParameters & mu,
-                                                                          const std::vector<Point> & observation_points,
-                                                                          const std::vector<dof_id_type> & elem_ids,
-                                                                          const std::vector<subdomain_id_type> & sbd_ids,
-                                                                          const System & sys);
 
   /**
    * Storage for pre-evaluated values. The indexing is given by:
@@ -149,11 +140,11 @@ public:
    * Indexing into preevaluated_values for the case where the preevaluated values
    * were obtained from evaluations at elements/quadrature points on a mesh.
    * The indexing here is:
-   *   elem_id --> qp --> point_index
+   *   (elem_id,side index) --> qp --> point_index
    * Then preevaluated_values[0][point_index] provides the vector of component values at
    * that point.
    */
-  std::unordered_map<dof_id_type, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
+  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
 
 };
 

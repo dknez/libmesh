@@ -1,0 +1,123 @@
+// rbOOmit: An implementation of the Certified Reduced Basis method.
+// Copyright (C) 2009, 2010 David J. Knezevic
+
+// This file is part of rbOOmit.
+
+// rbOOmit is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+
+// rbOOmit is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+
+// You should have received a copy of the GNU Lesser General Public
+// License along with this library; if not, write to the Free Software
+// Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+#ifndef LIBMESH_RB_PARAMETRIZED_FUNCTION_BASE_H
+#define LIBMESH_RB_PARAMETRIZED_FUNCTION_BASE_H
+
+// libMesh includes
+#include "libmesh/libmesh_common.h"
+
+// C++ includes
+#include <unordered_map>
+#include <vector>
+#include <map>
+
+namespace libMesh
+{
+
+class RBParameters;
+class Point;
+class System;
+
+/**
+ * Base class for an RBParameter-dependent function.
+ */
+class RBParametrizedFunctionBase
+{
+public:
+
+  /**
+   * Constructor.
+   */
+  RBParametrizedFunctionBase();
+
+  /**
+   * Special functions.
+   * - This class can be default copy/move assigned/constructed.
+   * - The destructor is defaulted out-of-line.
+   */
+  RBParametrizedFunctionBase (RBParametrizedFunctionBase &&) = default;
+  RBParametrizedFunctionBase (const RBParametrizedFunctionBase &) = default;
+  RBParametrizedFunctionBase & operator= (const RBParametrizedFunctionBase &) = default;
+  RBParametrizedFunctionBase & operator= (RBParametrizedFunctionBase &&) = default;
+  virtual ~RBParametrizedFunctionBase();
+
+  /**
+   * Specify the number of components in this parametrized function.
+   * A scalar-valued function has one component, a vector-valued
+   * function has more than one component.
+   */
+  virtual unsigned int get_n_components() const = 0;
+
+  /**
+   * If this parametrized function is defined based on a lookup table then
+   * we can call this function to initialize the table. This is a no-op by
+   * default, but it can be overridden in subclasses as needed.
+   */
+  virtual void initialize_lookup_table();
+
+  /**
+   * Get the value stored in _parameter_independent_data associated with
+   * \p region_name and \p property_name.
+   */
+  Number get_parameter_independent_data(const std::string & property_name,
+                                        subdomain_id_type sbd_id) const;
+
+  /**
+   * Boolean to indicate whether this parametrized function requires xyz perturbations
+   * in order to evaluate function values. An example of where perturbations are
+   * required is when the parametrized function is based on finite difference
+   * approximations to derivatives.
+   */
+  bool requires_xyz_perturbations;
+
+  /**
+   * Boolean to indicate if this parametrized function is defined based on a lookup
+   * table or not. If it is defined based on a lookup table, then the evaluation
+   * functions will access a discrete parameter to determine the index to lookup.
+   */
+  bool is_lookup_table;
+
+  /**
+   * If this is a lookup table, then lookup_table_param_name specifies the parameter
+   * that is used to index into the lookup table.
+   */
+  std::string lookup_table_param_name;
+
+  /**
+   * The finite difference step size in the case that this function in the case
+   * that this function uses finite differencing.
+   */
+  Real fd_delta;
+
+protected:
+
+  /**
+   * In some cases we need to store parameter-independent data which is related
+   * to this function but since it is parameter-indepedent should not be returned
+   * as part of evaluate().
+   *
+   * We index this data by "property name" --> subdomain_id --> value.
+   */
+  std::map<std::string, std::map<subdomain_id_type, Number>> _parameter_independent_data;
+};
+
+}
+
+#endif // LIBMESH_RB_PARAMETRIZED_FUNCTION_BASE_H
