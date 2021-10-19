@@ -329,10 +329,11 @@ void RBParametrizedFunction::preevaluate_parametrized_function_on_boundary(const
 
 Number RBParametrizedFunction::lookup_preevaluated_value_on_boundary(unsigned int comp,
                                                                      dof_id_type elem_id,
+                                                                     unsigned int side_index,
                                                                      unsigned int qp) const
 {
   const std::vector<unsigned int> & indices_at_qps =
-    libmesh_map_find(mesh_to_preevaluated_values_map, elem_id);
+    libmesh_map_find(mesh_to_preevaluated_values_map, std::make_pair(elem_id,side_index));
 
   libmesh_error_msg_if(qp >= indices_at_qps.size(), "Error: invalid qp");
 

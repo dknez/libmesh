@@ -333,14 +333,15 @@ private:
    * The parametrized functions that are used for training. We pre-compute and
    * store all of these functions, rather than recompute them at each iteration
    * of the training.
-   *
-   * We store values at quadrature points on elements that are local to this processor.
-   * The indexing is as follows:
-   *   basis function index --> element ID --> variable --> quadrature point --> value
-   * We use a map to index the element ID, since the IDs on this processor in
-   * generally will not start at zero.
    */
   std::vector<QpDataMap> _local_parametrized_functions_for_training;
+
+  /**
+   * The parametrized functions that are used for training. We pre-compute and
+   * store all of these functions, rather than recompute them at each iteration
+   * of the training.
+   */
+  std::vector<SideQpDataMap> _local_boundary_parametrized_functions_for_training;
 
   /**
    * Maximum value in _local_parametrized_functions_for_training across all processors.

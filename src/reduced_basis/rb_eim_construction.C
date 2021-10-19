@@ -649,6 +649,7 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   _max_abs_value_in_training_set = 0.;
 
   unsigned int n_comps = eim_eval.get_parametrized_function().get_n_components();
+  RBParametrizedFunction::MeshRegion mesh_region = get_rb_eim_evaluation().get_parametrized_function().mesh_region();
 
   // Keep track of the maximum value per component. This will allow
   // us to scale the components to all have a similar magnitude,
@@ -657,7 +658,12 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
   // are not ignored.
   std::vector<Real> max_abs_value_per_component_in_training_set(n_comps);
 
-  _local_parametrized_functions_for_training.resize( get_n_training_samples() );
+  if(mesh_region == RBParametrizedFunction::INTERIOR)
+    _local_parametrized_functions_for_training.resize( get_n_training_samples() );
+
+  if(mesh_region == RBParametrizedFunction::SIDE)
+    _local_boundary_parametrized_functions_for_training.resize( get_n_training_samples() );
+
   for (auto i : make_range(get_n_training_samples()))
     {
       libMesh::out << "Initializing parametrized function for training sample "
@@ -665,41 +671,88 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
 
       set_params_from_training_set(i);
 
-      eim_eval.get_parametrized_function().preevaluate_parametrized_function_on_mesh(get_parameters(),
-                                                                                     _local_quad_point_locations,
-                                                                                     _local_quad_point_subdomain_ids,
-                                                                                     _local_quad_point_locations_perturbations,
-                                                                                     *this);
+      if(mesh_region == RBParametrizedFunction::INTERIOR)
+        {
+          eim_eval.get_parametrized_function().preevaluate_parametrized_function_on_mesh(get_parameters(),
+                                                                                        _local_quad_point_locations,
+                                                                                        _local_quad_point_subdomain_ids,
+                                                                                        _local_quad_point_locations_perturbations,
+                                                                                        *this);
 
-      for (const auto & pr : _local_quad_point_locations)
-      {
-        dof_id_type elem_id = pr.first;
-        const auto & xyz_vector = pr.second;
-
-        std::vector<std::vector<Number>> comps_and_qps(n_comps);
-        for (unsigned int comp=0; comp<n_comps; comp++)
+          for (const auto & pr : _local_quad_point_locations)
           {
-            comps_and_qps[comp].resize(xyz_vector.size());
-            for (unsigned int qp : index_range(xyz_vector))
+            dof_id_type elem_id = pr.first;
+            const auto & xyz_vector = pr.second;
+
+            std::vector<std::vector<Number>> comps_and_qps(n_comps);
+            for (unsigned int comp=0; comp<n_comps; comp++)
               {
-                Number value =
-                  eim_eval.get_parametrized_function().lookup_preevaluated_value_on_mesh(comp, elem_id, qp);
-                comps_and_qps[comp][qp] = value;
-
-                Real abs_value = std::abs(value);
-                if (abs_value > _max_abs_value_in_training_set)
+                comps_and_qps[comp].resize(xyz_vector.size());
+                for (unsigned int qp : index_range(xyz_vector))
                   {
-                    _max_abs_value_in_training_set = abs_value;
-                    _max_abs_value_in_training_set_index = i;
+                    Number value =
+                      eim_eval.get_parametrized_function().lookup_preevaluated_value_on_mesh(comp, elem_id, qp);
+                    comps_and_qps[comp][qp] = value;
+
+                    Real abs_value = std::abs(value);
+                    if (abs_value > _max_abs_value_in_training_set)
+                      {
+                        _max_abs_value_in_training_set = abs_value;
+                        _max_abs_value_in_training_set_index = i;
+                      }
+
+                    if (abs_value > max_abs_value_per_component_in_training_set[comp])
+                      max_abs_value_per_component_in_training_set[comp] = abs_value;
                   }
-
-                if (abs_value > max_abs_value_per_component_in_training_set[comp])
-                  max_abs_value_per_component_in_training_set[comp] = abs_value;
               }
-          }
 
-        _local_parametrized_functions_for_training[i][elem_id] = comps_and_qps;
-      }
+            _local_parametrized_functions_for_training[i][elem_id] = comps_and_qps;
+          }
+        }
+      else if(mesh_region == RBParametrizedFunction::SIDE)
+        {
+          eim_eval.get_parametrized_function().preevaluate_parametrized_function_on_boundary(get_parameters(),
+                                                                                             _local_boundary_quad_point_locations,
+                                                                                             _local_boundary_quad_point_boundary_ids,
+                                                                                             _local_boundary_quad_point_locations_perturbations,
+                                                                                             *this);
+
+          for (const auto & pr : _local_boundary_quad_point_locations)
+          {
+            std::pair<dof_id_type,unsigned int> elem_and_side = pr.first;
+            dof_id_type elem_id = elem_and_side.first;
+            unsigned int side_index = elem_and_side.second;
+            const auto & xyz_vector = pr.second;
+
+            std::vector<std::vector<Number>> comps_and_qps(n_comps);
+            for (unsigned int comp=0; comp<n_comps; comp++)
+              {
+                comps_and_qps[comp].resize(xyz_vector.size());
+                for (unsigned int qp : index_range(xyz_vector))
+                  {
+                    Number value =
+                      eim_eval.get_parametrized_function().lookup_preevaluated_value_on_boundary(comp, elem_id, side_index, qp);
+                    comps_and_qps[comp][qp] = value;
+
+                    Real abs_value = std::abs(value);
+                    if (abs_value > _max_abs_value_in_training_set)
+                      {
+                        _max_abs_value_in_training_set = abs_value;
+                        _max_abs_value_in_training_set_index = i;
+                      }
+
+                    if (abs_value > max_abs_value_per_component_in_training_set[comp])
+                      max_abs_value_per_component_in_training_set[comp] = abs_value;
+                  }
+              }
+
+            _local_boundary_parametrized_functions_for_training[i][elem_and_side] = comps_and_qps;
+          }
+        }
+      else
+        {
+          libmesh_error_msg("Mesh region type not currently supported: " << mesh_region);
+        }
     }
 
   libMesh::out << "Parametrized functions in training set initialized" << std::endl;
@@ -726,31 +779,35 @@ void RBEIMConstruction::initialize_parametrized_functions_in_training_set()
         _component_scaling_in_training_set[i] = _max_abs_value_in_training_set / max_abs_value_per_component_in_training_set[i];
     }
 
-  _parametrized_functions_for_training_obs_values.resize( get_n_training_samples() );
-
-  // Finally, we also evaluate the parametrized functions for training at the "observation points"
-  if (eim_eval.get_n_observation_points() > 0)
+  // We currently only consider observation values in the case of an interior mesh region.
+  if(mesh_region == RBParametrizedFunction::INTERIOR)
     {
-      std::vector<dof_id_type> observation_points_elem_ids;
-      std::vector<subdomain_id_type> observation_points_sbd_ids;
-      initialize_observation_points_data(observation_points_elem_ids, observation_points_sbd_ids);
-
-      for (auto i : make_range(get_n_training_samples()))
+      // Finally, we also evaluate the parametrized functions for training at the "observation points"
+      if (eim_eval.get_n_observation_points() > 0)
         {
-          libMesh::out << "Initializing observation values for training sample "
-            << (i+1) << " of " << get_n_training_samples() << std::endl;
+          _parametrized_functions_for_training_obs_values.resize( get_n_training_samples() );
 
-          set_params_from_training_set(i);
+          std::vector<dof_id_type> observation_points_elem_ids;
+          std::vector<subdomain_id_type> observation_points_sbd_ids;
+          initialize_observation_points_data(observation_points_elem_ids, observation_points_sbd_ids);
 
-          _parametrized_functions_for_training_obs_values[i] =
-            eim_eval.get_parametrized_function().evaluate_at_observation_points(get_parameters(),
-                                                                                eim_eval.get_observation_points(),
-                                                                                observation_points_elem_ids,
-                                                                                observation_points_sbd_ids,
-                                                                                *this);
+          for (auto i : make_range(get_n_training_samples()))
+            {
+              libMesh::out << "Initializing observation values for training sample "
+                << (i+1) << " of " << get_n_training_samples() << std::endl;
 
-          libmesh_error_msg_if(_parametrized_functions_for_training_obs_values[i].size() != eim_eval.get_n_observation_points(),
-                               "Number of observation values should match number of observation points");
+              set_params_from_training_set(i);
+
+              _parametrized_functions_for_training_obs_values[i] =
+                eim_eval.get_parametrized_function().evaluate_at_observation_points(get_parameters(),
+                                                                                    eim_eval.get_observation_points(),
+                                                                                    observation_points_elem_ids,
+                                                                                    observation_points_sbd_ids,
+                                                                                    *this);
+
+              libmesh_error_msg_if(_parametrized_functions_for_training_obs_values[i].size() != eim_eval.get_n_observation_points(),
+                                  "Number of observation values should match number of observation points");
+            }
         }
     }
 
@@ -761,9 +818,9 @@ void RBEIMConstruction::initialize_qp_data()
   LOG_SCOPE("initialize_qp_data()", "RBEIMConstruction");
 
   if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::INTERIOR)
-    initialize_qp_data_elem_interior();
+    initialize_qp_data_interior();
   else if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::SIDE)
-    initialize_qp_data_elem_side();
+    initialize_qp_data_side();
   else if(get_rb_eim_evaluation().get_parametrized_function().mesh_region() == RBParametrizedFunction::NODE)
     libmesh_error_msg("EIM region for nodes is not supported yet");
   else
@@ -921,10 +978,11 @@ void RBEIMConstruction::initialize_qp_data_side()
   FEMContext context(*this);
   init_context(context);
 
-  FEBase * elem_fe = nullptr;
-  context.get_element_fe( 0, elem_fe );
-  const std::vector<Real> & JxW = elem_fe->get_JxW();
-  const std::vector<Point> & xyz = elem_fe->get_xyz();
+  FEBase* side_fe = nullptr;
+  context.get_side_fe( 0, side_fe );
+
+  const std::vector<Real> & JxW_side = side_fe->get_JxW();
+  const std::vector< Point > & xyz_side = side_fe->get_xyz();
 
   _local_boundary_quad_point_locations.clear();
   _local_boundary_quad_point_boundary_ids.clear();
@@ -932,102 +990,115 @@ void RBEIMConstruction::initialize_qp_data_side()
 
   _local_boundary_quad_point_locations_perturbations.clear();
 
-  UPDATE THE CODE BELOW...
+  // BounadryInfo and related data structures
+  const auto & binfo = mesh.get_boundary_info();
+  std::vector<boundary_id_type> side_boundary_ids;
 
   for (const auto & elem : mesh.active_local_element_ptr_range())
     {
       dof_id_type elem_id = elem->id();
 
       context.pre_fe_reinit(*this, elem);
-      context.elem_fe_reinit();
 
-      _local_quad_point_locations[elem_id] = xyz;
-      _local_quad_point_JxW[elem_id] = JxW;
-      _local_boundary_quad_point_boundary_ids[elem_id] = elem->subdomain_id();
-
-      if (get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
+      for (context.side = 0;
+           context.side != context.get_elem().n_sides();
+           ++context.side)
         {
-          Real fd_delta = get_rb_eim_evaluation().get_parametrized_function().fd_delta;
-
-          std::vector<std::vector<Point>> xyz_perturb_vec_at_qps;
-
-          for (const Point & xyz_qp : xyz)
+          // skip non-boundary elements
+          if(!context.get_elem().neighbor_ptr(context.side))
             {
-              std::vector<Point> xyz_perturb_vec;
-              if (elem->dim() == 3)
-                {
-                  Point xyz_perturb = xyz_qp;
+              binfo.boundary_ids(elem, context.side, side_boundary_ids);
 
-                  xyz_perturb(0) += fd_delta;
-                  xyz_perturb_vec.emplace_back(xyz_perturb);
-                  xyz_perturb(0) -= fd_delta;
+              bool has_side_boundary_id = false;
+              boundary_id_type matching_boundary_id = BoundaryInfo::invalid_id;
+              for(boundary_id_type side_boundary_id : side_boundary_ids)
+                if(parametrized_function_boundary_ids.count(side_boundary_id))
+                  {
+                    has_side_boundary_id = true;
+                    matching_boundary_id = side_boundary_id;
+                    break;
+                  }
 
-                  xyz_perturb(1) += fd_delta;
-                  xyz_perturb_vec.emplace_back(xyz_perturb);
-                  xyz_perturb(1) -= fd_delta;
+              if(has_side_boundary_id)
+              {
+                context.get_side_fe(/*var=*/0, elem->dim())->reinit(elem, context.side);
 
-                  xyz_perturb(2) += fd_delta;
-                  xyz_perturb_vec.emplace_back(xyz_perturb);
-                  xyz_perturb(2) -= fd_delta;
-                }
-              else if (elem->dim() == 2)
-                {
-                  // In this case we assume that we have a 2D element
-                  // embedded in 3D space. In this case we have to use
-                  // the following approach to perturb xyz:
-                  //  1) inverse map xyz to the reference element
-                  //  2) perturb on the reference element in the (xi,eta) "directions"
-                  //  3) map the perturbed points back to the physical element
-                  // This approach is necessary to ensure that the perturbed points
-                  // are still in the element.
+                _local_boundary_quad_point_locations[elem_id] = xyz_side;
+                _local_boundary_quad_point_JxW[elem_id] = JxW_side;
+                _local_boundary_quad_point_boundary_ids[elem_id] = matching_boundary_id;
 
-                  Point xi_eta =
-                    FEMap::inverse_map(elem->dim(),
-                                      elem,
-                                      xyz_qp,
-                                      /*Newton iteration tolerance*/ TOLERANCE,
-                                      /*secure*/ true);
+                if (get_rb_eim_evaluation().get_parametrized_function().requires_xyz_perturbations)
+                  {
+                    Real fd_delta = get_rb_eim_evaluation().get_parametrized_function().fd_delta;
 
-                  // Inverse map should map back to a 2D reference domain
-                  libmesh_assert(std::abs(xi_eta(2)) < TOLERANCE);
+                    std::vector<std::vector<Point>> xyz_perturb_vec_at_qps;
 
-                  Point xi_eta_perturb = xi_eta;
+                    for (const Point & xyz_qp : xyz_side)
+                      {
+                        std::vector<Point> xyz_perturb_vec;
+                        if (elem->dim() == 3)
+                          {
+                            // In this case we have a 3D element, and hence the side is 2D.
+                            //
+                            // We use the following approach to perturb xyz:
+                            //  1) inverse map xyz to the reference element
+                            //  2) perturb on the reference element in the (xi,eta) "directions"
+                            //  3) map the perturbed points back to the physical element
+                            // This approach is necessary to ensure that the perturbed points
+                            // are still in the element's side.
 
-                  xi_eta_perturb(0) += fd_delta;
-                  Point xyz_perturb_0 =
-                    FEMap::map(elem->dim(),
-                               elem,
-                               xi_eta_perturb);
-                  xi_eta_perturb(0) -= fd_delta;
+                            std::unique_ptr<const Elem> elem_side;
+                            elem->build_side_ptr(elem_side, context.side);
 
-                  xi_eta_perturb(1) += fd_delta;
-                  Point xyz_perturb_1 =
-                    FEMap::map(elem->dim(),
-                               elem,
-                               xi_eta_perturb);
-                  xi_eta_perturb(1) -= fd_delta;
+                            Point xi_eta =
+                              FEMap::inverse_map(elem_side->dim(),
+                                                 *elem_side,
+                                                 xyz_qp,
+                                                 /*Newton iteration tolerance*/ TOLERANCE,
+                                                 /*secure*/ true);
 
-                  // Finally, we rescale xyz_perturb_0 and xyz_perturb_1 so that
-                  // (xyz_perturb - xyz_qp).norm() == fd_delta, since this is
-                  // required in order to compute finite differences correctly.
-                  Point unit_0 = (xyz_perturb_0-xyz_qp).unit();
-                  Point unit_1 = (xyz_perturb_1-xyz_qp).unit();
+                            // Inverse map should map back to a 2D reference domain
+                            libmesh_assert(std::abs(xi_eta(2)) < TOLERANCE);
 
-                  xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_0);
-                  xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_1);
-                }
-              else
-                {
-                  // We current do nothing in the dim=1 case since
-                  // we have no need for this capability so far.
-                  // Support for this case could be added if it is
-                  // needed.
-                }
+                            Point xi_eta_perturb = xi_eta;
 
-              xyz_perturb_vec_at_qps.emplace_back(xyz_perturb_vec);
+                            xi_eta_perturb(0) += fd_delta;
+                            Point xyz_perturb_0 =
+                              FEMap::map(elem_side->dim(),
+                                         *elem_side,
+                                         xi_eta_perturb);
+                            xi_eta_perturb(0) -= fd_delta;
+
+                            xi_eta_perturb(1) += fd_delta;
+                            Point xyz_perturb_1 =
+                              FEMap::map(elem_side->dim(),
+                                         *elem_side,
+                                         xi_eta_perturb);
+                            xi_eta_perturb(1) -= fd_delta;
+
+                            // Finally, we rescale xyz_perturb_0 and xyz_perturb_1 so that
+                            // (xyz_perturb - xyz_qp).norm() == fd_delta, since this is
+                            // required in order to compute finite differences correctly.
+                            Point unit_0 = (xyz_perturb_0-xyz_qp).unit();
+                            Point unit_1 = (xyz_perturb_1-xyz_qp).unit();
+
+                            xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_0);
+                            xyz_perturb_vec.emplace_back(xyz_qp + fd_delta*unit_1);
+                          }
+                        else
+                          {
+                            // We current do nothing for sides of dim=2 or dim=1 elements
+                            // since we have no need for this capability so far.
+                            // Support for these cases could be added if it is needed.
+                          }
+
+                        xyz_perturb_vec_at_qps.emplace_back(xyz_perturb_vec);
+                      }
+
+                    _local_boundary_quad_point_locations_perturbations[elem_id] = xyz_perturb_vec_at_qps;
+                  }
+              }
             }
-
-          _local_quad_point_locations_perturbations[elem_id] = xyz_perturb_vec_at_qps;
         }
     }
 }

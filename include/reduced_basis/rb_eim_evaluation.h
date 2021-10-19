@@ -76,6 +76,11 @@ public:
   typedef std::map<dof_id_type, std::vector<std::vector<Number>>> QpDataMap;
 
   /**
+   * Type of the data structure used to map from (elem id,side) -> [n_vars][n_qp] data.
+   */
+  typedef std::map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Number>>> SideQpDataMap;
+
+  /**
    * Clear this object.
    */
   virtual void clear() override;

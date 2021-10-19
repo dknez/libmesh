@@ -159,9 +159,9 @@ public:
    * such as surface loads.
    */
   virtual void preevaluate_parametrized_function_on_boundary(const RBParameters & mu,
-                                                             const std::unordered_map<dof_id_type, std::vector<Point>> & all_xyz,
-                                                             const std::unordered_map<dof_id_type, subdomain_id_type> & sbd_ids,
-                                                             const std::unordered_map<dof_id_type, std::vector<std::vector<Point>> > & all_xyz_perturb,
+                                                             const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
+                                                             const std::unordered_map<std::pair<dof_id_type,unsigned int>, boundary_id_type> & boundary_ids,
+                                                             const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
                                                              const System & sys);
 
   /**
@@ -170,6 +170,7 @@ public:
    */
   virtual Number lookup_preevaluated_value_on_boundary(unsigned int comp,
                                                        dof_id_type elem_id,
+                                                       unsigned int side_index,
                                                        unsigned int qp) const;
 
   /**
