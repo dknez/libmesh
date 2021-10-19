@@ -104,7 +104,7 @@ void SideRBParametrizedFunction::vectorized_evaluate(const std::vector<RBParamet
 
 void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const RBParameters & mu,
                                                                            const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<Point>> & all_xyz,
-                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, subdomain_id_type> & sbd_ids,
+                                                                           const std::unordered_map<std::pair<dof_id_type,unsigned int>, subdomain_id_type> & boundary_ids,
                                                                            const std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > & all_xyz_perturb,
                                                                            const System & sys)
 {
@@ -134,37 +134,48 @@ void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const
     {
       auto fe = con.get_element_fe(/*var=*/0, dim);
       fe->get_phi();
+
+      auto side_fe = c.get_side_fe(/*var=*/0, dim);
+      side_fe->get_phi();
     }
 
   unsigned int counter = 0;
   for (const auto & xyz_pair : all_xyz)
     {
-      dof_id_type elem_id = xyz_pair.first;
+      auto elem_side_pair = xyz_pair.first;
+      dof_id_type elem_id = elem_side_pair.first;
+      unsigned int side_index = elem_side_pair.second;
+
       const std::vector<Point> & xyz_vec = xyz_pair.second;
 
-      subdomain_id_type subdomain_id = libmesh_map_find(sbd_ids, elem_id);
+      boundary_id_type boundary_id = libmesh_map_find(boundary_ids, elem_side_pair);
 
       // The amount of data to be stored for each component
       auto n_qp = xyz_vec.size();
-      mesh_to_preevaluated_values_map[elem_id].resize(n_qp);
+      mesh_to_preevaluated_values_map[elem_side_pair].resize(n_qp);
 
       // Also initialize phi in order to compute phi_i_qp
       const Elem & elem_ref = sys.get_mesh().elem_ref(elem_id);
+
+      std::unique_ptr<const Elem> elem_side;
+      elem_ref.build_side_ptr(elem_side, side_index);
+
       con.pre_fe_reinit(sys, &elem_ref);
 
-      auto elem_fe = con.get_element_fe(/*var=*/0, elem_ref.dim());
-      const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
+      auto side_fe = con.get_side_fe(/*var=*/0, elem_ref.dim());
+      side_fe->reinit(&elem_ref, side_index);
 
-      elem_fe->reinit(&elem_ref);
+      const std::vector<std::vector<Real>> & phi = side_fe->get_phi();
 
       for (auto qp : index_range(xyz_vec))
         {
-          mesh_to_preevaluated_values_map[elem_id][qp] = counter;
+          mesh_to_preevaluated_values_map[elem_side_pair][qp] = counter;
 
           all_xyz_vec[counter] = xyz_vec[qp];
-          elem_ids_vec[counter] = elem_id;
+          elem_ids_vec[counter] = elem_side_pair.first;
+          side_indices_vec[counter] = elem_side_pair.second;
           qps_vec[counter] = qp;
-          sbd_ids_vec[counter] = subdomain_id;
+          boundary_ids_vec[counter] = boundary_id;
 
           phi_i_qp_vec[counter].resize(phi.size());
           for(auto i : index_range(phi))
@@ -173,7 +184,7 @@ void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const
           if (requires_xyz_perturbations)
             {
               const auto & qps_and_perturbs =
-                libmesh_map_find(all_xyz_perturb, elem_id);
+                libmesh_map_find(all_xyz_perturb, elem_side_pair);
               libmesh_error_msg_if(qp >= qps_and_perturbs.size(), "Error: Invalid qp");
 
               all_xyz_perturb_vec[counter] = qps_and_perturbs[qp];
@@ -191,19 +202,21 @@ void SideRBParametrizedFunction::preevaluate_parametrized_function_on_mesh(const
   vectorized_evaluate(mus,
                       all_xyz_vec,
                       elem_ids_vec,
+                      side_indices_vec,
                       qps_vec,
-                      sbd_ids_vec,
+                      boundary_ids_vec,
                       all_xyz_perturb_vec,
                       phi_i_qp_vec,
                       preevaluated_values);
 }
 
 Number SideRBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned int comp,
-                                                                 dof_id_type elem_id,
-                                                                 unsigned int qp) const
+                                                                     dof_id_type elem_id,
+                                                                     unsigned int side_index,
+                                                                     unsigned int qp) const
 {
   const std::vector<unsigned int> & indices_at_qps =
-    libmesh_map_find(mesh_to_preevaluated_values_map, elem_id);
+    libmesh_map_find(mesh_to_preevaluated_values_map, std::make_pair(elem_id,side_index));
 
   libmesh_error_msg_if(qp >= indices_at_qps.size(), "Error: invalid qp");
 
@@ -212,72 +225,6 @@ Number SideRBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned in
   libmesh_error_msg_if(index >= preevaluated_values[0].size(), "Error: invalid index");
 
   return preevaluated_values[0][index][comp];
-}
-
-std::vector<std::vector<Number>> SideRBParametrizedFunction::evaluate_at_observation_points(const RBParameters & mu,
-                                                                                        const std::vector<Point> & observation_points,
-                                                                                        const std::vector<dof_id_type> & elem_ids,
-                                                                                        const std::vector<subdomain_id_type> & sbd_ids,
-                                                                                        const System & sys)
-{
-  unsigned int n_points = observation_points.size();
-
-  if (n_points == 0)
-    return std::vector<std::vector<Number>>();
-
-  const std::vector<unsigned int> qps_vec(n_points);
-  std::vector<std::vector<Real>> phi_i_qp_vec(n_points);
-
-  // In order to compute phi_i_qp, we initialize a FEMContext
-  FEMContext con(sys);
-  for (auto dim : con.elem_dimensions())
-    {
-      auto fe = con.get_element_fe(/*var=*/0, dim);
-      fe->get_phi();
-    }
-
-  for (unsigned int obs_pt_idx : index_range(observation_points))
-    {
-      const Point & obs_pt = observation_points[obs_pt_idx];
-      dof_id_type elem_id = elem_ids[obs_pt_idx];
-
-      // Also initialize phi in order to compute phi_i_qp
-      const Elem & elem_ref = sys.get_mesh().elem_ref(elem_id);
-
-      auto elem_fe = con.get_element_fe(/*var=*/0, elem_ref.dim());
-      const std::vector<std::vector<Real>> & phi = elem_fe->get_phi();
-
-      Point obs_pt_ref_coords =
-        FEMap::inverse_map(
-          elem_ref.dim(),
-          &elem_ref,
-          obs_pt,
-          /*tolerance*/ TOLERANCE,
-          /*secure*/ true,
-          /*extra_checks*/ false);
-
-      std::vector<Point> obs_pt_ref_coords_vec = {obs_pt_ref_coords};
-
-      con.pre_fe_reinit(sys, &elem_ref);
-      con.get_element_fe(/*var*/ 0, elem_ref.dim())->reinit(&elem_ref, &obs_pt_ref_coords_vec);
-
-      phi_i_qp_vec[obs_pt_idx].resize(phi.size());
-      for(auto i : index_range(phi))
-        phi_i_qp_vec[obs_pt_idx][i] = phi[i][/*qp*/ 0];
-    }
-
-  std::vector<std::vector<std::vector<Number>>> obs_pt_values;
-
-  vectorized_evaluate({mu},
-                      observation_points,
-                      elem_ids,
-                      qps_vec,
-                      sbd_ids,
-                      /*all_xyz_perturb_vec*/ {},
-                      phi_i_qp_vec,
-                      obs_pt_values);
-
-  return obs_pt_values[0];
 }
 
 }
