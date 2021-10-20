@@ -73,69 +73,11 @@ void RBEIMConstruction::clear()
   _local_quad_point_subdomain_ids.clear();
 }
 
-void RBEIMConstruction::initialize_eim_assembly_objects()
+void RBEIMConstruction::print_info()
 {
-  _rb_eim_assembly_objects.clear();
-  for (auto i : make_range(get_rb_eim_evaluation().get_n_basis_functions()))
-    _rb_eim_assembly_objects.push_back(build_eim_assembly(i));
-}
+  libMesh::out << std::endl << "RBEIMConstruction parameters:" << std::endl;
 
-std::vector<std::unique_ptr<ElemAssembly>> & RBEIMConstruction::get_eim_assembly_objects()
-{
-  return _rb_eim_assembly_objects;
-}
-
-void RBEIMConstruction::init_context(FEMContext & c)
-{
-  // Pre-request FE data for all element dimensions present in the
-  // mesh.  Note: we currently pre-request FE data for all variables
-  // in the current system but in some cases that may be overkill, for
-  // example if only variable 0 is used.
-  const System & sys = c.get_system();
-  const MeshBase & mesh = sys.get_mesh();
-
-  for (unsigned int dim=1; dim<=3; ++dim)
-    if (mesh.elem_dimensions().count(dim))
-      for (auto var : make_range(sys.n_vars()))
-      {
-        auto fe = c.get_element_fe(var, dim);
-        fe->get_JxW();
-        fe->get_xyz();
-
-        auto side_fe = c.get_side_fe(var, dim);
-        side_fe->get_JxW();
-        side_fe->get_xyz();
-      }
-}
-
-void RBEIMConstruction::set_rel_training_tolerance(Real new_training_tolerance)
-{
-  _rel_training_tolerance = new_training_tolerance;
-}
-
-Real RBEIMConstruction::get_rel_training_tolerance()
-{
-  return _rel_training_tolerance;
-}
-
-void RBEIMConstruction::set_abs_training_tolerance(Real new_training_tolerance)
-{
-  _abs_training_tolerance = new_training_tolerance;
-}
-
-Real RBEIMConstruction::get_abs_training_tolerance()
-{
-  return _abs_training_tolerance;
-}
-
-unsigned int RBEIMConstruction::get_Nmax() const
-{
-  return _Nmax;
-}
-
-void RBEIMConstruction::set_Nmax(unsigned int Nmax)
-{
-  _Nmax = Nmax;
+  RBEIMConstructionBase::print_info();
 }
 
 Real RBEIMConstruction::get_max_abs_value_in_training_set() const

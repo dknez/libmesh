@@ -63,8 +63,7 @@ RBEIMConstructionBase::RBEIMConstructionBase (EquationSystems & es,
     _rel_training_tolerance(1.e-4),
     _abs_training_tolerance(1.e-12),
     _max_abs_value_in_training_set(0.),
-    _max_abs_value_in_training_set_index(0),
-    _rb_eim_eval(nullptr)
+    _max_abs_value_in_training_set_index(0)
 {
   // The training set should be the same on all processors in the
   // case of EIM training.
@@ -81,21 +80,39 @@ void RBEIMConstructionBase::clear()
   _eim_projection_matrix.resize(0,0);
 }
 
-void RBEIMConstructionBase::set_rb_eim_evaluation(RBEIMEvaluationBase & rb_eim_eval_in)
+void RBEIMConstructionBase::initialize_eim_assembly_objects(const RBEIMEvaluationBase & rb_eim_evaluation)
 {
-  _rb_eim_eval = &rb_eim_eval_in;
+  _rb_eim_assembly_objects.clear();
+  for (auto i : make_range(rb_eim_evaluation.get_n_basis_functions()))
+    _rb_eim_assembly_objects.push_back(build_eim_assembly(i));
 }
 
-RBEIMEvaluationBase & RBEIMConstructionBase::get_rb_eim_evaluation()
+std::vector<std::unique_ptr<ElemAssembly>> & RBEIMConstructionBase::get_eim_assembly_objects()
 {
-  libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluation object hasn't been initialized yet");
-  return *_rb_eim_eval;
+  return _rb_eim_assembly_objects;
 }
 
-const RBEIMEvaluationBase & RBEIMConstructionBase::get_rb_eim_evaluation() const
+void RBEIMConstructionBase::init_context(FEMContext & c)
 {
-  libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluationBase object hasn't been initialized yet");
-  return *_rb_eim_eval;
+  // Pre-request FE data for all element dimensions present in the
+  // mesh.  Note: we currently pre-request FE data for all variables
+  // in the current system but in some cases that may be overkill, for
+  // example if only variable 0 is used.
+  const System & sys = c.get_system();
+  const MeshBase & mesh = sys.get_mesh();
+
+  for (unsigned int dim=1; dim<=3; ++dim)
+    if (mesh.elem_dimensions().count(dim))
+      for (auto var : make_range(sys.n_vars()))
+      {
+        auto fe = c.get_element_fe(var, dim);
+        fe->get_JxW();
+        fe->get_xyz();
+
+        auto side_fe = c.get_side_fe(var, dim);
+        side_fe->get_JxW();
+        side_fe->get_xyz();
+      }
 }
 
 void RBEIMConstructionBase::set_best_fit_type_flag (const std::string & best_fit_type_string)
@@ -116,7 +133,6 @@ void RBEIMConstructionBase::set_best_fit_type_flag (const std::string & best_fit
 void RBEIMConstructionBase::print_info()
 {
   // Print out info that describes the current setup
-  libMesh::out << std::endl << "RBEIMConstructionBase parameters:" << std::endl;
   libMesh::out << "system name: " << this->name() << std::endl;
   libMesh::out << "Nmax: " << get_Nmax() << std::endl;
   libMesh::out << "Greedy relative error tolerance: " << get_rel_training_tolerance() << std::endl;
@@ -307,13 +323,12 @@ void RBEIMConstructionBase::set_rb_construction_parameters(unsigned int n_traini
     }
 }
 
-Real RBEIMConstructionBase::train_eim_approximation()
+Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
 {
   LOG_SCOPE("train_eim_approximation()", "RBConstruction");
 
   _eim_projection_matrix.resize(get_Nmax(),get_Nmax());
 
-  RBEIMEvaluation & rbe = get_rb_eim_evaluation();
   rbe.initialize_parameters(*this);
   rbe.resize_data_structures(get_Nmax());
 

@@ -82,21 +82,6 @@ public:
   virtual void clear() override;
 
   /**
-   * Set the RBEIMEvaluation object.
-   */
-  void set_rb_eim_evaluation(RBEIMEvaluationBase & rb_eim_eval_in);
-
-  /**
-   * Get a reference to the RBEvaluation object.
-   */
-  RBEIMEvaluationBase & get_rb_eim_evaluation();
-
-  /**
-   * Get a const reference to the RBEvaluation object.
-   */
-  const RBEIMEvaluationBase & get_rb_eim_evaluation() const;
-
-  /**
    * Perform initialization of this object to prepare for running
    * train_eim_approximation().
    */
@@ -140,7 +125,7 @@ public:
    * Generate the EIM approximation for the specified parametrized function.
    * Return the final tolerance from the training algorithm.
    */
-  Real train_eim_approximation();
+  Real train_eim_approximation(RBEIMEvaluationBase & rbe);
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis
@@ -148,7 +133,7 @@ public:
    * for performing the Offline stage of the Reduced Basis method where
    * we want to use assembly functions based on this EIM approximation.
    */
-  virtual void initialize_eim_assembly_objects();
+  virtual void initialize_eim_assembly_objects(const RBEIMEvaluationBase & rb_eim_evaluation);
 
   /**
    * \returns The vector of assembly objects that point to this RBEIMConstructionBase.
@@ -208,11 +193,6 @@ public:
 protected:
 
   /**
-   * The RBEIMEvaluation object that we use to perform the EIM training.
-   */
-  RBEIMEvaluationBase * _rb_eim_eval;
-
-  /**
    * Maximum number of EIM basis functions we are willing to use.
    */
   unsigned int _Nmax;
@@ -222,6 +202,17 @@ protected:
    */
   Real _rel_training_tolerance;
   Real _abs_training_tolerance;
+
+  /**
+   * Maximum value in _local_parametrized_functions_for_training across all processors.
+   * This can be used for normalization purposes, for example.
+   */
+  Real _max_abs_value_in_training_set;
+
+  /**
+   * The training sample index at which we found _max_abs_value_in_training_set.
+   */
+  unsigned int _max_abs_value_in_training_set_index;
 
   /**
    * The matrix we use in order to perform L2 projections of

@@ -84,6 +84,21 @@ public:
   virtual void clear() override;
 
   /**
+   * Set the RBEIMEvaluation object.
+   */
+  void set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in);
+
+  /**
+   * Get a reference to the RBEvaluation object.
+   */
+  RBEIMEvaluation & get_rb_eim_evaluation();
+
+  /**
+   * Get a const reference to the RBEvaluation object.
+   */
+  const RBEIMEvaluation & get_rb_eim_evaluation() const;
+
+  /**
    * Get the maximum value (across all processors) from
    * the parametrized functions in the training set.
    */
@@ -166,6 +181,11 @@ private:
     Number scaling_factor);
 
   /**
+   * The RBEIMEvaluation object that we use to perform the EIM training.
+   */
+  RBEIMEvaluation * _rb_eim_eval;
+
+  /**
    * The parametrized functions that are used for training. We pre-compute and
    * store all of these functions, rather than recompute them at each iteration
    * of the training.
@@ -177,17 +197,6 @@ private:
    * generally will not start at zero.
    */
   std::vector<QpDataMap> _local_parametrized_functions_for_training;
-
-  /**
-   * Maximum value in _local_parametrized_functions_for_training across all processors.
-   * This can be used for normalization purposes, for example.
-   */
-  Real _max_abs_value_in_training_set;
-
-  /**
-   * The training sample index at which we found _max_abs_value_in_training_set.
-   */
-  unsigned int _max_abs_value_in_training_set_index;
 
   /**
    * The quadrature point locations, quadrature point weights (JxW), and subdomain IDs
