@@ -329,6 +329,7 @@ include_HEADERS =  \
         reduced_basis/rb_data_serialization.h \
         reduced_basis/rb_eim_assembly.h \
         reduced_basis/rb_eim_construction.h \
+        reduced_basis/rb_eim_construction_base.h \
         reduced_basis/rb_eim_evaluation.h \
         reduced_basis/rb_eim_theta.h \
         reduced_basis/rb_evaluation.h \
