@@ -17,26 +17,49 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#ifndef LIBMESH_RB_EIM_EVALUATION_H
-#define LIBMESH_RB_EIM_EVALUATION_H
+#ifndef LIBMESH_RB_EIM_EVALUATION_BASE_H
+#define LIBMESH_RB_EIM_EVALUATION_BASE_H
 
 // libMesh includes
-#include "libmesh/rb_eim_evaluation_base.h"
+#include "libmesh/point.h"
+#include "libmesh/rb_theta_expansion.h"
+#include "libmesh/rb_parametrized.h"
+#include "libmesh/parallel_object.h"
+#include "libmesh/dense_matrix.h"
+#include "libmesh/dense_vector.h"
+
+// C++ includes
+#include <memory>
+#include <map>
+#include <vector>
+#include <string>
 
 namespace libMesh
 {
 
+class RBParameters;
+class RBParametrizedFunction;
+class RBTheta;
+class System;
+class Elem;
+
 /**
- * Evaluation class for EIM on element interiors.
+ * This class enables evaluation of an Empirical Interpolation Method (EIM)
+ * approximation. RBEvaluation plays an analogous role in the context of
+ * the regular reduced basis method.
+ *
+ * This is the base class. Extend in subclasses to handle EIM on element
+ * interiors or sides.
  */
-class RBEIMEvaluation : public RBEIMEvaluationBase
+class RBEIMEvaluationBase : public RBParametrized,
+                            public ParallelObject
 {
 public:
 
   /**
    * Constructor.
    */
-  RBEIMEvaluation(const Parallel::Communicator & comm);
+  RBEIMEvaluationBase(const Parallel::Communicator & comm);
 
   /**
    * Special functions.
@@ -44,28 +67,22 @@ public:
        constructed/assigned.
    * - The destructor is defaulted out of line.
    */
-  RBEIMEvaluation (RBEIMEvaluation &&) = default;
-  RBEIMEvaluation (const RBEIMEvaluation &) = delete;
-  RBEIMEvaluation & operator= (const RBEIMEvaluation &) = delete;
-  RBEIMEvaluation & operator= (RBEIMEvaluation &&) = default;
-  virtual ~RBEIMEvaluation ();
+  RBEIMEvaluationBase (RBEIMEvaluationBase &&) = default;
+  RBEIMEvaluationBase (const RBEIMEvaluationBase &) = delete;
+  RBEIMEvaluationBase & operator= (const RBEIMEvaluationBase &) = delete;
+  RBEIMEvaluationBase & operator= (RBEIMEvaluationBase &&) = default;
+  virtual ~RBEIMEvaluationBase ();
 
   /**
-   * Type of the data structure used to map from (elem id) -> [n_vars][n_qp] data.
+   * Clear this object.
    */
-  typedef std::map<dof_id_type, std::vector<std::vector<Number>>> QpDataMap;
+  virtual void clear() override;
 
   /**
-   * Set the parametrized function that we will approximate
-   * using the Empirical Interpolation Method. This object
-   * will take ownership of the unique pointer.
+   * Resize the data structures for storing data associated
+   * with this object.
    */
-  void set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf);
-
-  /**
-   * Get a const reference to the parametrized function.
-   */
-  RBParametrizedFunction & get_parametrized_function();
+  void resize_data_structures(const unsigned int Nmax);
 
   /**
    * Calculate the EIM approximation for the given
@@ -75,21 +92,34 @@ public:
   DenseVector<Number> rb_eim_solve(DenseVector<Number> & EIM_rhs);
 
   /**
-   * Return the current number of EIM basis functions.
+   * Perform rb_eim_solves at each mu in \p mus and store the results
+   * in _rb_eim_solutions.
    */
-  virtual unsigned int get_n_basis_functions() const override;
+  void rb_eim_solves(const RBParametrizedFunction & parametrized_function,
+                     const std::vector<RBParameters> & mus,
+                     unsigned int N);
+
+  /**
+   * Return the current number of EIM basis functions.
+   * Override in sub-classes based on the type of EIM that
+   * is being performed.
+   */
+  virtual unsigned int get_n_basis_functions() const = 0;
 
   /**
    * Set the number of basis functions. Useful when reading in
    * stored data.
+   * Override in sub-classes based on the type of EIM that
+   * is being performed.
    */
-  void set_n_basis_functions(unsigned int n_bfs) override;
+  virtual void set_n_basis_functions(unsigned int n_bfs) const = 0;
 
   /**
-   * Subtract coeffs[i]*basis_function[i] from \p v.
+   * Build a vector of RBTheta objects that accesses the components
+   * of the RB_solution member variable of this RBEvaluation.
+   * Store these objects in the member vector rb_theta_objects.
    */
-  void decrement_vector(QpDataMap & v,
-                        const DenseVector<Number> & coeffs);
+  void initialize_eim_theta_objects();
 
   /**
    * \returns The vector of theta objects that point to this RBEIMEvaluation.
@@ -97,64 +127,70 @@ public:
   std::vector<std::unique_ptr<RBTheta>> & get_eim_theta_objects();
 
   /**
-   * Fill up values by evaluating the parametrized function \p pf for all quadrature
-   * points on element \p elem_id and component \p comp.
+   * Build a theta object corresponding to EIM index \p index.
+   * The default implementation builds an RBEIMTheta object, possibly
+   * override in subclasses if we need more specialized behavior.
    */
-  static void get_parametrized_function_values_at_qps(
-    const QpDataMap & pf,
-    dof_id_type elem_id,
-    unsigned int comp,
-    std::vector<Number> & values);
+  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
 
   /**
-   * Same as above, except that we just return the value at the qp^th
-   * quadrature point.
+   * Set _rb_eim_solutions. Normally we update _rb_eim_solutions by performing
+   * and EIM solve, but in some cases we want to set the EIM solution coefficients
+   * elsewhere, so this setter enables us to do that.
    */
-  static Number get_parametrized_function_value(
-    const Parallel::Communicator & comm,
-    const QpDataMap & pf,
-    dof_id_type elem_id,
-    unsigned int comp,
-    unsigned int qp);
+  void set_rb_eim_solutions(const std::vector<DenseVector<Number>> & rb_eim_solutions);
 
   /**
-   * Fill up \p values with the basis function values for basis function
-   * \p basis_function_index and variable \p var, at all quadrature points
-   * on element \p elem_id. Each processor stores data for only the
-   * elements local to that processor, so if elem_id is not on this processor
-   * then \p values will be empty.
+   * Return the EIM solution coefficients from the most recent call to rb_eim_solves().
    */
-  void get_eim_basis_function_values_at_qps(unsigned int basis_function_index,
-                                            dof_id_type elem_id,
-                                            unsigned int var,
-                                            std::vector<Number> & values) const;
+  const std::vector<DenseVector<Number>> & get_rb_eim_solutions() const;
 
   /**
-   * Same as above, except that we just return the value at the qp^th
-   * quadrature point.
+   * Return entry \p index for each solution in _rb_eim_solutions.
    */
-  Number get_eim_basis_function_value(unsigned int basis_function_index,
-                                      dof_id_type elem_id,
-                                      unsigned int comp,
-                                      unsigned int qp) const;
+  std::vector<Number> get_rb_eim_solutions_entries(unsigned int index) const;
 
   /**
-   * Get a reference to the i^th basis function.
+   * Return a const reference to the EIM solutions for the parameters in the training set.
    */
-  const QpDataMap & get_basis_function(unsigned int i) const;
+  const std::vector<DenseVector<Number>> & get_eim_solutions_for_training_set() const;
 
   /**
-   * Add \p bf to our EIM basis.
+   * Return a writeable reference to the EIM solutions for the parameters in the training set.
    */
-  void add_basis_function_and_interpolation_data(
-    const QpDataMap & bf,
-    Point p,
-    unsigned int comp,
-    dof_id_type elem_id,
-    subdomain_id_type subdomain_id,
-    unsigned int qp,
-    const std::vector<Point> & perturbs,
-    const std::vector<Real> & phi_i_qp);
+  std::vector<DenseVector<Number>> & get_eim_solutions_for_training_set();
+
+  /**
+   * Set the data associated with EIM interpolation points.
+   */
+  void add_interpolation_points_xyz(Point p);
+  void add_interpolation_points_comp(unsigned int comp);
+  void add_interpolation_points_subdomain_id(subdomain_id_type sbd_id);
+  void add_interpolation_points_xyz_perturbations(const std::vector<Point> & perturbs);
+  void add_interpolation_points_elem_id(dof_id_type elem_id);
+  void add_interpolation_points_qp(unsigned int qp);
+  void add_interpolation_points_phi_i_qp(const std::vector<Real> & phi_i_qp);
+
+  /**
+   * Get the data associated with EIM interpolation points.
+   */
+  Point get_interpolation_points_xyz(unsigned int index) const;
+  unsigned int get_interpolation_points_comp(unsigned int index) const;
+  subdomain_id_type get_interpolation_points_subdomain_id(unsigned int index) const;
+  const std::vector<Point> & get_interpolation_points_xyz_perturbations(unsigned int index) const;
+  dof_id_type get_interpolation_points_elem_id(unsigned int index) const;
+  unsigned int get_interpolation_points_qp(unsigned int index) const;
+  const std::vector<Real> & get_interpolation_points_phi_i_qp(unsigned int index) const;
+
+  /**
+   * Set entry of the EIM interpolation matrix.
+   */
+  void set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value);
+
+  /**
+   * Get the EIM interpolation matrix.
+   */
+  const DenseMatrix<Number> & get_interpolation_matrix() const;
 
   /**
    * Set the observation points and components.
@@ -203,45 +239,20 @@ public:
   bool get_preserve_rb_eim_solutions() const;
 
   /**
-   * Write out all the basis functions to file.
-   * \p sys is used for file IO
-   * \p directory_name specifies which directory to write files to
-   * \p read_binary_basis_functions indicates whether to write
-   * binary or ASCII data
-   *
-   * Note: this is not currently a virtual function and is not related
-   * to the RBEvaluation function of the same name.
+   * Return a set that specifies which EIM variables will be projected
+   * and written out in write_out_projected_basis_functions().
+   * By default this returns an empty vector, but can be overridden in
+   * subclasses to specify the EIM variables that are relevant for visualization.
    */
-  void write_out_basis_functions(const std::string & directory_name = "offline_data",
-                                 bool write_binary_basis_functions = true);
+  virtual std::set<unsigned int> get_eim_vars_to_project_and_write() const;
 
   /**
-   * Read in all the basis functions from file.
-   *
-   * \param sys The Mesh in this System determines the parallel distribution of the basis functions.
-   * \param directory_name Specifies which directory to write files to.
-   * \param read_binary_basis_functions Indicates whether to expect binary or ASCII data.
-   *
-   * Note: this is not a virtual function and is not related to the
-   * RBEvaluation function of the same name.
+   * Indicate whether we should apply scaling to the components of the parametrized
+   * function during basis function enrichment in order give an approximately uniform
+   * magnitude for all components. This is helpful in cases where the components vary
+   * widely in magnitude.
    */
-  void read_in_basis_functions(const System & sys,
-                               const std::string & directory_name = "offline_data",
-                               bool read_binary_basis_functions = true);
-
-  /**
-   * Project variable \p var of \p bf_data into the solution vector of System.
-   */
-  void project_qp_data_map_onto_system(System & sys,
-                                       const QpDataMap & bf_data,
-                                       unsigned int var);
-
-  /**
-   * Project all basis functions using project_qp_data_map_onto_system() and
-   * then write out the resulting vectors.
-   */
-  void write_out_projected_basis_functions(System & sys,
-                                           const std::string & directory_name = "offline_data");
+  virtual bool scale_components_in_enrichment() const;
 
 private:
 
@@ -317,7 +328,7 @@ private:
 
   /**
    * The vector of RBTheta objects that are created to point to
-   * this RBEIMEvaluation.
+   * this RBEIMEvaluationBase.
    */
   std::vector<std::unique_ptr<RBTheta>> _rb_eim_theta_objects;
 

@@ -327,6 +327,7 @@ BUILT_SOURCES = \
         rb_eim_construction.h \
         rb_eim_construction_base.h \
         rb_eim_evaluation.h \
+        rb_eim_evaluation_base.h \
         rb_eim_theta.h \
         rb_evaluation.h \
         rb_parameters.h \
@@ -1533,6 +1534,9 @@ rb_eim_construction_base.h: $(top_srcdir)/include/reduced_basis/rb_eim_construct
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_eim_evaluation.h: $(top_srcdir)/include/reduced_basis/rb_eim_evaluation.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
+rb_eim_evaluation_base.h: $(top_srcdir)/include/reduced_basis/rb_eim_evaluation_base.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_eim_theta.h: $(top_srcdir)/include/reduced_basis/rb_eim_theta.h
