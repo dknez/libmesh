@@ -63,6 +63,11 @@ RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function()
   return *_parametrized_function;
 }
 
+std::unique_ptr<RBTheta> RBEIMEvaluation::build_eim_theta(unsigned int index)
+{
+  return libmesh_make_unique<RBEIMTheta>(*this, index);
+}
+
 DenseVector<Number> RBEIMEvaluation::rb_eim_solve(DenseVector<Number> & EIM_rhs)
 {
   LOG_SCOPE("rb_eim_solve()", "RBEIMEvaluation");

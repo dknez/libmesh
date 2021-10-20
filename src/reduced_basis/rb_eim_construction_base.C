@@ -46,7 +46,7 @@
 // rbOOmit includes
 #include "libmesh/rb_eim_construction_base.h"
 #include "libmesh/rb_eim_evaluation.h"
-#include "libmesh/rb_parametrized_function.h"
+#include "libmesh/rb_parametrized_function_base.h"
 
 // C++ include
 #include <limits>
@@ -63,8 +63,7 @@ RBEIMConstructionBase::RBEIMConstructionBase (EquationSystems & es,
     _rel_training_tolerance(1.e-4),
     _abs_training_tolerance(1.e-12),
     _max_abs_value_in_training_set(0.),
-    _max_abs_value_in_training_set_index(0),
-    _rb_eim_eval(nullptr)
+    _max_abs_value_in_training_set_index(0)
 {
   // The training set should be the same on all processors in the
   // case of EIM training.
@@ -163,12 +162,19 @@ void RBEIMConstructionBase::print_info()
   libMesh::out << std::endl;
 }
 
+
+Real RBEIMConstructionBase::get_max_abs_value_in_training_set() const
+{
+  return _max_abs_value_in_training_set;
+}
+
 void RBEIMConstructionBase::initialize_eim_construction()
 {
   initialize_parametrized_functions_in_training_set();
 }
 
-void RBEIMConstructionBase::process_parameters_file (const std::string & parameters_filename)
+void RBEIMConstructionBase::process_parameters_file (const RBParametrizedFunctionBase & parametrized_function,
+                                                     const std::string & parameters_filename)
 {
   // First read in data from input_filename
   GetPot infile(parameters_filename);
@@ -232,7 +238,8 @@ void RBEIMConstructionBase::process_parameters_file (const std::string & paramet
     log_scaling_in[pr.first] = false;
 
   // Set the parameters that have been read in
-  set_rb_construction_parameters(n_training_samples,
+  set_rb_construction_parameters(parametrized_function,
+                                 n_training_samples,
                                  deterministic_training,
                                  training_parameters_random_seed_in,
                                  quiet_mode_in,
@@ -245,7 +252,8 @@ void RBEIMConstructionBase::process_parameters_file (const std::string & paramet
                                  log_scaling_in);
 }
 
-void RBEIMConstructionBase::set_rb_construction_parameters(unsigned int n_training_samples_in,
+void RBEIMConstructionBase::set_rb_construction_parameters(const RBParametrizedFunctionBase & parametrized_function,
+                                                           unsigned int n_training_samples_in,
                                                            bool deterministic_training_in,
                                                            unsigned int training_parameters_random_seed_in,
                                                            bool quiet_mode_in,
@@ -272,10 +280,10 @@ void RBEIMConstructionBase::set_rb_construction_parameters(unsigned int n_traini
   set_rel_training_tolerance(rel_training_tolerance_in);
   set_abs_training_tolerance(abs_training_tolerance_in);
 
-  if (get_rb_eim_evaluation().get_parametrized_function().is_lookup_table)
+  if (parametrized_function.is_lookup_table)
     {
       const std::string & lookup_table_param_name =
-        get_rb_eim_evaluation().get_parametrized_function().lookup_table_param_name;
+        parametrized_function.lookup_table_param_name;
 
       libmesh_error_msg_if(!discrete_parameter_values_in.count(lookup_table_param_name),
         "Lookup table parameter should be discrete");
@@ -310,12 +318,12 @@ void RBEIMConstructionBase::set_rb_construction_parameters(unsigned int n_traini
     }
 
 
-  if (get_rb_eim_evaluation().get_parametrized_function().is_lookup_table)
+  if (parametrized_function.is_lookup_table)
     {
       // Also, now that we've initialized the training set, overwrite the training
       // samples to ensure that we have full coverage of the lookup tbale.
       const std::string & lookup_table_param_name =
-        get_rb_eim_evaluation().get_parametrized_function().lookup_table_param_name;
+        parametrized_function.lookup_table_param_name;
 
       std::vector<Number> lookup_table_training_samples(n_training_samples_in);
       std::iota(lookup_table_training_samples.begin(), lookup_table_training_samples.end(), 0);
@@ -324,7 +332,8 @@ void RBEIMConstructionBase::set_rb_construction_parameters(unsigned int n_traini
     }
 }
 
-Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
+Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe,
+                                                    const RBParametrizedFunctionBase & parametrized_function)
 {
   LOG_SCOPE("train_eim_approximation()", "RBConstruction");
 
@@ -361,7 +370,7 @@ Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
       libMesh::out << std::endl << "---- Basis dimension: "
                    << rbe.get_n_basis_functions() << " ----" << std::endl;
 
-      if (get_rb_eim_evaluation().get_parametrized_function().is_lookup_table &&
+      if (parametrized_function.is_lookup_table &&
           best_fit_type_flag == EIM_BEST_FIT)
         {
           // If this is a lookup table and we're using "EIM best fit" then we
@@ -425,7 +434,7 @@ Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
       }
     } // end while(true)
 
-  if (rbe.get_parametrized_function().is_lookup_table &&
+  if (parametrized_function.is_lookup_table &&
       best_fit_type_flag != EIM_BEST_FIT)
     {
       // We only enter here if best_fit_type_flag != EIM_BEST_FIT because we
@@ -434,29 +443,6 @@ Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
     }
 
   return greedy_error;
-}
-
-void RBEIMConstructionBase::init_context(FEMContext & c)
-{
-  // Pre-request FE data for all element dimensions present in the
-  // mesh.  Note: we currently pre-request FE data for all variables
-  // in the current system but in some cases that may be overkill, for
-  // example if only variable 0 is used.
-  const System & sys = c.get_system();
-  const MeshBase & mesh = sys.get_mesh();
-
-  for (unsigned int dim=1; dim<=3; ++dim)
-    if (mesh.elem_dimensions().count(dim))
-      for (auto var : make_range(sys.n_vars()))
-      {
-        auto fe = c.get_element_fe(var, dim);
-        fe->get_JxW();
-        fe->get_xyz();
-
-        auto side_fe = c.get_side_fe(var, dim);
-        side_fe->get_JxW();
-        side_fe->get_xyz();
-      }
 }
 
 void RBEIMConstructionBase::set_rel_training_tolerance(Real new_training_tolerance)
@@ -487,11 +473,6 @@ unsigned int RBEIMConstructionBase::get_Nmax() const
 void RBEIMConstructionBase::set_Nmax(unsigned int Nmax)
 {
   _Nmax = Nmax;
-}
-
-Real RBEIMConstructionBase::get_max_abs_value_in_training_set() const
-{
-  return _max_abs_value_in_training_set;
 }
 
 } // namespace libMesh

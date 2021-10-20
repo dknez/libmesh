@@ -42,7 +42,7 @@ Number RBEIMTheta::evaluate(const RBParameters & mu)
 
 std::vector<Number> RBEIMTheta::evaluate_vec(const std::vector<RBParameters> & mus)
 {
-  rb_eim_eval.rb_eim_solves(mus, rb_eim_eval.get_n_basis_functions());
+  rb_eim_eval.rb_eim_solves(rb_eim_eval.get_parametrized_function(), mus, rb_eim_eval.get_n_basis_functions());
   return rb_eim_eval.get_rb_eim_solutions_entries(index);
 }
 

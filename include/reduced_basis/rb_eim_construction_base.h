@@ -40,6 +40,8 @@
 namespace libMesh
 {
 
+class RBParametrizedFunctionBase;
+
 /**
  * RBEIMConstructionBase implements the Construction stage of the
  * Empirical Interpolation Method (EIM). This can be used to
@@ -85,19 +87,21 @@ public:
    * Perform initialization of this object to prepare for running
    * train_eim_approximation().
    */
-  void initialize_eim_construction(RBEIMEvaluationBase & rbe);
+  void initialize_eim_construction();
 
   /**
    * Read parameters in from file and set up this system
    * accordingly.
    */
-  virtual void process_parameters_file (const std::string & parameters_filename);
+  virtual void process_parameters_file (const RBParametrizedFunctionBase & parametrized_function,
+                                        const std::string & parameters_filename);
 
   /**
    * Set the state of this RBConstruction object based on the arguments
    * to this function.
    */
-  void set_rb_construction_parameters(unsigned int n_training_samples_in,
+  void set_rb_construction_parameters(const RBParametrizedFunctionBase & parametrized_function,
+                                      unsigned int n_training_samples_in,
                                       bool deterministic_training_in,
                                       unsigned int training_parameters_random_seed_in,
                                       bool quiet_mode_in,
@@ -122,25 +126,11 @@ public:
   virtual void print_info();
 
   /**
-   * Set the RBEIMEvaluation object.
-   */
-  void set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in);
-
-  /**
-   * Get a reference to the RBEvaluation object.
-   */
-  RBEIMEvaluation & get_rb_eim_evaluation();
-
-  /**
-   * Get a const reference to the RBEvaluation object.
-   */
-  const RBEIMEvaluation & get_rb_eim_evaluation(RBEIMEvaluationBase & rbe) const;
-
-  /**
    * Generate the EIM approximation for the specified parametrized function.
    * Return the final tolerance from the training algorithm.
    */
-  Real train_eim_approximation();
+  Real train_eim_approximation(RBEIMEvaluationBase & rbe,
+                               const RBParametrizedFunctionBase & parametrized_function);
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis
@@ -148,7 +138,7 @@ public:
    * for performing the Offline stage of the Reduced Basis method where
    * we want to use assembly functions based on this EIM approximation.
    */
-  virtual void initialize_eim_assembly_objects();
+  virtual void initialize_eim_assembly_objects(const RBEIMEvaluationBase & rb_eim_evaluation);
 
   /**
    * \returns The vector of assembly objects that point to this RBEIMConstructionBase.
@@ -188,6 +178,12 @@ public:
   virtual void set_Nmax(unsigned int Nmax);
 
   /**
+   * Get the maximum value (across all processors) from
+   * the parametrized functions in the training set.
+   */
+  Real get_max_abs_value_in_training_set() const;
+
+  /**
    * Get the EIM solution vector at all parametrized functions in the training
    * set. In some cases we want to store this data for future use. For example
    * this is useful in the case that the parametrized function is defined
@@ -195,7 +191,7 @@ public:
    * if we store the EIM solution data, we can do Online solves without
    * initializing the look-up table data.
    */
-  void store_eim_solutions_for_training_set();
+  virtual void store_eim_solutions_for_training_set() = 0;
 
   /**
    * Enum that indicates which type of "best fit" algorithm
@@ -206,6 +202,38 @@ public:
   BEST_FIT_TYPE best_fit_type_flag;
 
 protected:
+
+  /**
+   * Add a new basis function to the EIM approximation.
+   */
+  virtual void enrich_eim_approximation(unsigned int training_index) = 0;
+
+  /**
+   * Update the matrices used in training the EIM approximation.
+   */
+  virtual void update_eim_matrices() = 0;
+
+  /**
+   * We compute the best fit of parametrized_function
+   * into the EIM space and then evaluate the error
+   * in the norm defined by inner_product_matrix.
+   *
+   * \returns The error in the best fit
+   */
+  virtual Real compute_best_fit_error() = 0;
+
+  /**
+   * Compute and store the parametrized function for each
+   * parameter in the training set at all the stored qp locations.
+   */
+  virtual void initialize_parametrized_functions_in_training_set() = 0;
+
+  /**
+   * Find the training sample that has the largest EIM approximation error
+   * based on the current EIM approximation. Return the maximum error, and
+   * the training sample index at which it occured.
+   */
+  virtual std::pair<Real, unsigned int> compute_max_eim_error() = 0;
 
   /**
    * Maximum number of EIM basis functions we are willing to use.

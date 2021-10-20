@@ -68,6 +68,13 @@ public:
   RBParametrizedFunction & get_parametrized_function();
 
   /**
+   * Build a theta object corresponding to EIM index \p index.
+   * The default implementation builds an RBEIMTheta object, possibly
+   * override in subclasses if we need more specialized behavior.
+   */
+  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) override;
+
+  /**
    * Calculate the EIM approximation for the given
    * right-hand side vector \p EIM_rhs. Store the
    * solution coefficients in the member _eim_solution.
@@ -83,7 +90,7 @@ public:
    * Set the number of basis functions. Useful when reading in
    * stored data.
    */
-  void set_n_basis_functions(unsigned int n_bfs) override;
+  virtual void set_n_basis_functions(unsigned int n_bfs) override;
 
   /**
    * Subtract coeffs[i]*basis_function[i] from \p v.
@@ -157,52 +164,6 @@ public:
     const std::vector<Real> & phi_i_qp);
 
   /**
-   * Set the observation points and components.
-   */
-  void set_observation_points(const std::vector<Point> & observation_points_xyz);
-
-  /**
-   * Get the number of observation points.
-   */
-  unsigned int get_n_observation_points() const;
-
-  /**
-   * Get the observation points.
-   */
-  const std::vector<Point> & get_observation_points() const;
-
-  /**
-   * Get the observation value for the specified basis function and observation point.
-   */
-  const std::vector<Number> & get_observation_values(unsigned int bf_index, unsigned int obs_pt_index) const;
-
-  /**
-   * Get a const reference to all the observation values, indexed as follows:
-   *  basis_function index --> observation point index --> value.
-   */
-  const std::vector<std::vector<std::vector<Number>>> & get_observation_values() const;
-
-  /**
-   * Add values at the observation points for a new basis function.
-   */
-  void add_observation_values_for_basis_function(const std::vector<std::vector<Number>> & values);
-
-  /**
-   * Set all observation values.
-   */
-  void set_observation_values(const std::vector<std::vector<std::vector<Number>>> & values);
-
-  /**
-   * Set _preserve_rb_eim_solutions.
-   */
-  void set_preserve_rb_eim_solutions(bool preserve_rb_eim_solutions);
-
-  /**
-   * Get _preserve_rb_eim_solutions.
-   */
-  bool get_preserve_rb_eim_solutions() const;
-
-  /**
    * Write out all the basis functions to file.
    * \p sys is used for file IO
    * \p directory_name specifies which directory to write files to
@@ -243,69 +204,7 @@ public:
   void write_out_projected_basis_functions(System & sys,
                                            const std::string & directory_name = "offline_data");
 
-private:
-
-  /**
-   * The EIM solution coefficients from the most recent call to rb_eim_solves().
-   */
-  std::vector<DenseVector<Number>> _rb_eim_solutions;
-
-  /**
-   * Storage for EIM solutions from the training set. This is typically used in
-   * the case that we have is_lookup_table==true in our RBParametrizedFunction,
-   * since in that case we need to store all the EIM solutions on the training
-   * set so that we do not always need to refer to the lookup table itself
-   * (since in some cases, like in the Online stage, the lookup table is not
-   * available).
-   */
-  std::vector<DenseVector<Number>> _eim_solutions_for_training_set;
-
-  /**
-   * The parameters and the number of basis functions that were used in the
-   * most recent call to rb_eim_solves(). We store this so that we can
-   * check if we can skip calling rb_eim_solves() again if the inputs
-   * haven't changed.
-   */
-  std::vector<RBParameters> _rb_eim_solves_mus;
-  unsigned int _rb_eim_solves_N;
-
-  /**
-   * Dense matrix that stores the lower triangular
-   * interpolation matrix that can be used
-   */
-  DenseMatrix<Number> _interpolation_matrix;
-
-  /**
-   * We need to store interpolation point data in order to
-   * evaluate parametrized functions at the interpolation points.
-   * This requires the xyz locations, the components to evaluate,
-   * and the subdomain IDs.
-   */
-  std::vector<Point> _interpolation_points_xyz;
-  std::vector<unsigned int> _interpolation_points_comp;
-  std::vector<subdomain_id_type> _interpolation_points_subdomain_id;
-
-  /**
-   * We also store perturbations of the xyz locations that may be
-   * needed to evaluate finite difference approximations to derivatives.
-   */
-  std::vector<std::vector<Point>> _interpolation_points_xyz_perturbations;
-
-  /**
-   * We also store the element ID and qp index of each interpolation
-   * point so that we can evaluate our basis functions at these
-   * points by simply looking up the appropriate stored values.
-   * This data is only needed during the EIM training.
-   */
-  std::vector<dof_id_type> _interpolation_points_elem_id;
-  std::vector<unsigned int> _interpolation_points_qp;
-
-  /**
-   * We store the shape function values at the qp as well. These values
-   * allows us to evaluate parametrized functions that depend on nodal
-   * data.
-   */
-  std::vector<std::vector<Real>> _interpolation_points_phi_i_qp;
+protected:
 
   /**
    * Store the parametrized function that will be approximated
@@ -314,12 +213,6 @@ private:
    * approximated by a separate variable in the EIM system.
    */
   std::unique_ptr<RBParametrizedFunction> _parametrized_function;
-
-  /**
-   * The vector of RBTheta objects that are created to point to
-   * this RBEIMEvaluation.
-   */
-  std::vector<std::unique_ptr<RBTheta>> _rb_eim_theta_objects;
 
   /**
    * The EIM basis functions. We store values at quadrature points
@@ -350,31 +243,6 @@ private:
    * they are read in on processor 0.
    */
   void distribute_bfs(const System & sys);
-
-  /**
-   * Let {p_1,...,p_n} be a set of n "observation points", where we can
-   * observe the values of our EIM basis functions. Also, let
-   * {comp_k} be the components of the EIM basis function that
-   * we will observe. Then the corresponding observation values, v_ijk,
-   * are given by:
-   *  v_ijk = eim_basis_function[i][p_j][comp_k].
-   *
-   * These observation values can be used to observe the EIM approximation
-   * at specific points of interest, where the points of interest are defined
-   * by the observation points.
-   *
-   * _observation_points_value is indexed as follows:
-   *  basis_function index --> observation point index --> comp index --> value
-   */
-  std::vector<Point> _observation_points_xyz;
-  std::vector<std::vector<std::vector<Number>>> _observation_points_values;
-
-  /**
-   * Boolean to indicate if we skip updating _rb_eim_solutions in rb_eim_solves().
-   * This is relevant for cases when we set up _rb_eim_solutions elsewhere and we
-   * want to avoid changing it.
-   */
-  bool _preserve_rb_eim_solutions;
 
 };
 

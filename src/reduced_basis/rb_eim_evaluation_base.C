@@ -83,18 +83,6 @@ void RBEIMEvaluationBase::resize_data_structures(const unsigned int Nmax)
   _interpolation_matrix.resize(Nmax,Nmax);
 }
 
-void RBEIMEvaluationBase::set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf)
-{
-  _parametrized_function = std::move(pf);
-}
-
-RBParametrizedFunction & RBEIMEvaluationBase::get_parametrized_function()
-{
-  libmesh_error_msg_if(!_parametrized_function, "Parametrized function not initialized yet");
-
-  return *_parametrized_function;
-}
-
 DenseVector<Number> RBEIMEvaluationBase::rb_eim_solve(DenseVector<Number> & EIM_rhs)
 {
   LOG_SCOPE("rb_eim_solve()", "RBEIMEvaluationBase");
@@ -114,7 +102,7 @@ DenseVector<Number> RBEIMEvaluationBase::rb_eim_solve(DenseVector<Number> & EIM_
   return rb_eim_solution;
 }
 
-void RBEIMEvaluationBase::rb_eim_solves(const RBParametrizedFunction & parametrized_function,
+void RBEIMEvaluationBase::rb_eim_solves(RBParametrizedFunction & parametrized_function,
                                         const std::vector<RBParameters> & mus,
                                         unsigned int N)
 {
@@ -215,11 +203,6 @@ void RBEIMEvaluationBase::initialize_eim_theta_objects()
 std::vector<std::unique_ptr<RBTheta>> & RBEIMEvaluationBase::get_eim_theta_objects()
 {
   return _rb_eim_theta_objects;
-}
-
-std::unique_ptr<RBTheta> RBEIMEvaluationBase::build_eim_theta(unsigned int index)
-{
-  return libmesh_make_unique<RBEIMTheta>(*this, index);
 }
 
 void RBEIMEvaluationBase::set_rb_eim_solutions(const std::vector<DenseVector<Number>> & rb_eim_solutions)

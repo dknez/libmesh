@@ -95,7 +95,7 @@ public:
    * Perform rb_eim_solves at each mu in \p mus and store the results
    * in _rb_eim_solutions.
    */
-  void rb_eim_solves(const RBParametrizedFunction & parametrized_function,
+  void rb_eim_solves(RBParametrizedFunction & parametrized_function,
                      const std::vector<RBParameters> & mus,
                      unsigned int N);
 
@@ -112,7 +112,7 @@ public:
    * Override in sub-classes based on the type of EIM that
    * is being performed.
    */
-  virtual void set_n_basis_functions(unsigned int n_bfs) const = 0;
+  virtual void set_n_basis_functions(unsigned int n_bfs) = 0;
 
   /**
    * Build a vector of RBTheta objects that accesses the components
@@ -131,7 +131,7 @@ public:
    * The default implementation builds an RBEIMTheta object, possibly
    * override in subclasses if we need more specialized behavior.
    */
-  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
+  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) = 0;
 
   /**
    * Set _rb_eim_solutions. Normally we update _rb_eim_solutions by performing
@@ -254,7 +254,7 @@ public:
    */
   virtual bool scale_components_in_enrichment() const;
 
-private:
+protected:
 
   /**
    * The EIM solution coefficients from the most recent call to rb_eim_solves().
@@ -331,36 +331,6 @@ private:
    * this RBEIMEvaluationBase.
    */
   std::vector<std::unique_ptr<RBTheta>> _rb_eim_theta_objects;
-
-  /**
-   * The EIM basis functions. We store values at quadrature points
-   * on elements that are local to this processor. The indexing
-   * is as follows:
-   *   basis function index --> element ID --> variable --> quadrature point --> value
-   * We use a map to index the element ID, since the IDs on this processor in
-   * general will not start at zero.
-   */
-  std::vector<QpDataMap> _local_eim_basis_functions;
-
-  /**
-   * Print the contents of _local_eim_basis_functions to libMesh::out.
-   * Helper function mainly useful for debugging.
-   */
-  void print_local_eim_basis_functions() const;
-
-  /**
-   * Helper function that gathers the contents of
-   * _local_eim_basis_functions to processor 0 in preparation for
-   * printing to file.
-   */
-  void gather_bfs();
-
-  /**
-   * Helper function that distributes the entries of
-   * _local_eim_basis_functions to their respective processors after
-   * they are read in on processor 0.
-   */
-  void distribute_bfs(const System & sys);
 
   /**
    * Let {p_1,...,p_n} be a set of n "observation points", where we can

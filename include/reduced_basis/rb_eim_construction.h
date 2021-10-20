@@ -85,10 +85,29 @@ public:
   virtual void print_info();
 
   /**
-   * Get the maximum value (across all processors) from
-   * the parametrized functions in the training set.
+   * Set the RBEIMEvaluation object.
    */
-  Real get_max_abs_value_in_training_set() const;
+  void set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in);
+
+  /**
+   * Get a reference to the RBEvaluation object.
+   */
+  RBEIMEvaluation & get_rb_eim_evaluation();
+
+  /**
+   * Get a const reference to the RBEvaluation object.
+   */
+  const RBEIMEvaluation & get_rb_eim_evaluation() const;
+
+  /**
+   * Get the EIM solution vector at all parametrized functions in the training
+   * set. In some cases we want to store this data for future use. For example
+   * this is useful in the case that the parametrized function is defined
+   * based on a look-up table rather than an analytical function, since
+   * if we store the EIM solution data, we can do Online solves without
+   * initializing the look-up table data.
+   */
+  virtual void store_eim_solutions_for_training_set() override;
 
   /**
    * Get a const reference to the specified parametrized function from
@@ -96,20 +115,41 @@ public:
    */
   const QpDataMap & get_parametrized_function_from_training_set(unsigned int training_index) const;
 
-private:
+protected:
+
+  /**
+   * Add a new basis function to the EIM approximation.
+   */
+  virtual void enrich_eim_approximation(unsigned int training_index) override;
+
+  /**
+   * Update the matrices used in training the EIM approximation.
+   */
+  virtual void update_eim_matrices() override;
+
+  /**
+   * We compute the best fit of parametrized_function
+   * into the EIM space and then evaluate the error
+   * in the norm defined by inner_product_matrix.
+   *
+   * \returns The error in the best fit
+   */
+  virtual Real compute_best_fit_error() override;
+
+  /**
+   * Compute and store the parametrized function for each
+   * parameter in the training set at all the stored qp locations.
+   */
+  virtual void initialize_parametrized_functions_in_training_set() override;
 
   /**
    * Find the training sample that has the largest EIM approximation error
    * based on the current EIM approximation. Return the maximum error, and
    * the training sample index at which it occured.
    */
-  std::pair<Real, unsigned int> compute_max_eim_error();
+  virtual std::pair<Real, unsigned int> compute_max_eim_error() override;
 
-  /**
-   * Compute and store the parametrized function for each
-   * parameter in the training set at all the stored qp locations.
-   */
-  void initialize_parametrized_functions_in_training_set();
+private:
 
   /**
    * Initialize the data associated with each quad point (location, JxW, etc.)
@@ -139,25 +179,6 @@ private:
    * for basis functions.
    */
   Real get_max_abs_value(const QpDataMap & v) const;
-
-  /**
-   * Add a new basis function to the EIM approximation.
-   */
-  void enrich_eim_approximation(unsigned int training_index);
-
-  /**
-   * Update the matrices used in training the EIM approximation.
-   */
-  void update_eim_matrices();
-
-  /**
-   * We compute the best fit of parametrized_function
-   * into the EIM space and then evaluate the error
-   * in the norm defined by inner_product_matrix.
-   *
-   * \returns The error in the best fit
-   */
-  Real compute_best_fit_error();
 
   /**
    * Scale all values in \p pf by \p scaling_factor
