@@ -85,7 +85,7 @@ public:
    * Perform initialization of this object to prepare for running
    * train_eim_approximation().
    */
-  void initialize_eim_construction();
+  void initialize_eim_construction(RBEIMEvaluationBase & rbe);
 
   /**
    * Read parameters in from file and set up this system
@@ -122,10 +122,25 @@ public:
   virtual void print_info();
 
   /**
+   * Set the RBEIMEvaluation object.
+   */
+  void set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in);
+
+  /**
+   * Get a reference to the RBEvaluation object.
+   */
+  RBEIMEvaluation & get_rb_eim_evaluation();
+
+  /**
+   * Get a const reference to the RBEvaluation object.
+   */
+  const RBEIMEvaluation & get_rb_eim_evaluation(RBEIMEvaluationBase & rbe) const;
+
+  /**
    * Generate the EIM approximation for the specified parametrized function.
    * Return the final tolerance from the training algorithm.
    */
-  Real train_eim_approximation(RBEIMEvaluationBase & rbe);
+  Real train_eim_approximation();
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis
@@ -133,7 +148,7 @@ public:
    * for performing the Offline stage of the Reduced Basis method where
    * we want to use assembly functions based on this EIM approximation.
    */
-  virtual void initialize_eim_assembly_objects(const RBEIMEvaluationBase & rb_eim_evaluation);
+  virtual void initialize_eim_assembly_objects();
 
   /**
    * \returns The vector of assembly objects that point to this RBEIMConstructionBase.

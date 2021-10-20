@@ -21,7 +21,7 @@
 #define LIBMESH_RB_EIM_CONSTRUCTION_H
 
 // rbOOmit includes
-#include "libmesh/rb_construction.h"
+#include "libmesh/rb_eim_construction_base.h"
 #include "libmesh/rb_assembly_expansion.h"
 #include "libmesh/rb_eim_assembly.h"
 #include "libmesh/rb_eim_evaluation.h"
@@ -32,10 +32,6 @@
 
 // C++ includes
 #include <unordered_map>
-#include <map>
-#include <string>
-#include <memory>
-#include <vector>
 
 namespace libMesh
 {
@@ -84,19 +80,9 @@ public:
   virtual void clear() override;
 
   /**
-   * Set the RBEIMEvaluation object.
+   * Print out info that describes the current setup of this RBConstruction.
    */
-  void set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in);
-
-  /**
-   * Get a reference to the RBEvaluation object.
-   */
-  RBEIMEvaluation & get_rb_eim_evaluation();
-
-  /**
-   * Get a const reference to the RBEvaluation object.
-   */
-  const RBEIMEvaluation & get_rb_eim_evaluation() const;
+  virtual void print_info();
 
   /**
    * Get the maximum value (across all processors) from

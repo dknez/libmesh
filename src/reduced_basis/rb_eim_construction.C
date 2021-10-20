@@ -57,7 +57,9 @@ namespace libMesh
 RBEIMConstruction::RBEIMConstruction (EquationSystems & es,
                                       const std::string & name_in,
                                       const unsigned int number_in)
-  : RBEIMConstructionBase(es, name_in, number_in)
+  :
+  RBEIMConstructionBase(es, name_in, number_in),
+  _rb_eim_eval(nullptr)
 {
 }
 
@@ -71,6 +73,23 @@ void RBEIMConstruction::clear()
   _local_quad_point_locations.clear();
   _local_quad_point_JxW.clear();
   _local_quad_point_subdomain_ids.clear();
+}
+
+void RBEIMConstruction::set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in)
+{
+  _rb_eim_eval = &rb_eim_eval_in;
+}
+
+RBEIMEvaluation & RBEIMConstruction::get_rb_eim_evaluation()
+{
+  libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluation object hasn't been initialized yet");
+  return *_rb_eim_eval;
+}
+
+const RBEIMEvaluation & RBEIMConstruction::get_rb_eim_evaluation() const
+{
+  libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluation object hasn't been initialized yet");
+  return *_rb_eim_eval;
 }
 
 void RBEIMConstruction::print_info()
