@@ -614,7 +614,8 @@ BUILT_SOURCES = auto_ptr.h default_coupling.h dirichlet_boundaries.h \
 	rb_parametrized_function_base.h rb_scm_construction.h \
 	rb_scm_evaluation.h rb_temporal_discretization.h rb_theta.h \
 	rb_theta_expansion.h side_rb_eim_assembly.h \
-	side_rb_eim_evaluation.h side_rb_parametrized_function.h \
+	side_rb_eim_construction.h side_rb_eim_evaluation.h \
+	side_rb_parametrized_function.h \
 	transient_rb_assembly_expansion.h transient_rb_construction.h \
 	transient_rb_evaluation.h transient_rb_theta_expansion.h \
 	boundary_volume_solution_transfer.h direct_solution_transfer.h \
@@ -1910,6 +1911,9 @@ rb_theta_expansion.h: $(top_srcdir)/include/reduced_basis/rb_theta_expansion.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 side_rb_eim_assembly.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_assembly.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
+side_rb_eim_construction.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_construction.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 side_rb_eim_evaluation.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_evaluation.h
