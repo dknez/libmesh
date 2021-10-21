@@ -68,25 +68,6 @@ std::unique_ptr<RBTheta> RBEIMEvaluation::build_eim_theta(unsigned int index)
   return libmesh_make_unique<RBEIMTheta>(*this, index);
 }
 
-DenseVector<Number> RBEIMEvaluation::rb_eim_solve(DenseVector<Number> & EIM_rhs)
-{
-  LOG_SCOPE("rb_eim_solve()", "RBEIMEvaluation");
-
-  libmesh_error_msg_if(EIM_rhs.size() > get_n_basis_functions(),
-                       "Error: N cannot be larger than the number of basis functions in rb_solve");
-
-  libmesh_error_msg_if(EIM_rhs.size()==0, "Error: N must be greater than 0 in rb_solve");
-
-  const unsigned int N = EIM_rhs.size();
-  DenseVector<Number> rb_eim_solution(N);
-  DenseMatrix<Number> interpolation_matrix_N;
-  _interpolation_matrix.get_principal_submatrix(N, interpolation_matrix_N);
-
-  interpolation_matrix_N.lu_solve(EIM_rhs, rb_eim_solution);
-
-  return rb_eim_solution;
-}
-
 unsigned int RBEIMEvaluation::get_n_basis_functions() const
 {
   return _local_eim_basis_functions.size();
@@ -125,11 +106,6 @@ void RBEIMEvaluation::decrement_vector(QpDataMap & v,
             }
     }
 
-}
-
-std::vector<std::unique_ptr<RBTheta>> & RBEIMEvaluation::get_eim_theta_objects()
-{
-  return _rb_eim_theta_objects;
 }
 
 void RBEIMEvaluation::get_parametrized_function_values_at_qps(

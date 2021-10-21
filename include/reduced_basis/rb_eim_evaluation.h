@@ -75,13 +75,6 @@ public:
   virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) override;
 
   /**
-   * Calculate the EIM approximation for the given
-   * right-hand side vector \p EIM_rhs. Store the
-   * solution coefficients in the member _eim_solution.
-   */
-  DenseVector<Number> rb_eim_solve(DenseVector<Number> & EIM_rhs);
-
-  /**
    * Return the current number of EIM basis functions.
    */
   virtual unsigned int get_n_basis_functions() const override;
@@ -97,11 +90,6 @@ public:
    */
   void decrement_vector(QpDataMap & v,
                         const DenseVector<Number> & coeffs);
-
-  /**
-   * \returns The vector of theta objects that point to this RBEIMEvaluation.
-   */
-  std::vector<std::unique_ptr<RBTheta>> & get_eim_theta_objects();
 
   /**
    * Fill up values by evaluating the parametrized function \p pf for all quadrature

@@ -312,19 +312,18 @@ protected:
   std::vector<unsigned int> _interpolation_points_qp;
 
   /**
+   * If the EIM approximation applies to element sides, then we need to
+   * store the side index and boundary ID for each quadrature point.
+   */
+  std::vector<unsigned int> _interpolation_points_side_index;
+  std::vector<boundary_id_type> _interpolation_points_boundary_id;
+
+  /**
    * We store the shape function values at the qp as well. These values
    * allows us to evaluate parametrized functions that depend on nodal
    * data.
    */
   std::vector<std::vector<Real>> _interpolation_points_phi_i_qp;
-
-  /**
-   * Store the parametrized function that will be approximated
-   * by this EIM system. Note that the parametrized function
-   * may have more than one component, and each component is
-   * approximated by a separate variable in the EIM system.
-   */
-  std::unique_ptr<RBParametrizedFunction> _parametrized_function;
 
   /**
    * The vector of RBTheta objects that are created to point to
