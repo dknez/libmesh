@@ -18,8 +18,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // rbOOmit includes
-#include "libmesh/rb_eim_assembly.h"
-#include "libmesh/rb_eim_construction.h"
+#include "libmesh/side_rb_eim_assembly.h"
+#include "libmesh/side_rb_eim_construction.h"
 
 // libMesh includes
 #include "libmesh/fem_context.h"
@@ -31,27 +31,28 @@
 namespace libMesh
 {
 
-RBEIMAssembly::RBEIMAssembly(RBEIMConstruction & rb_eim_con,
-                             unsigned int basis_function_index_in)
+SideRBEIMAssembly::SideRBEIMAssembly(SideRBEIMConstruction & rb_eim_con,
+                                     unsigned int basis_function_index_in)
   :
   _rb_eim_con(rb_eim_con),
   _basis_function_index(basis_function_index_in)
 {
 }
 
-RBEIMAssembly::~RBEIMAssembly() = default;
+SideRBEIMAssembly::~SideRBEIMAssembly() = default;
 
-void RBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
-                                            unsigned int comp,
-                                            std::vector<Number> & values)
+void SideRBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
+                                                unsigned int side_index,
+                                                unsigned int comp,
+                                                std::vector<Number> & values)
 {
   get_rb_eim_construction().get_rb_eim_evaluation().get_eim_basis_function_values_at_qps(
-    _basis_function_index, elem_id, comp, values);
+    _basis_function_index, elem_id, side_index, comp, values);
 
   libmesh_error_msg_if(values.empty(), "Error: EIM basis function has no entries on this element for this processor");
 }
 
-RBEIMConstruction & RBEIMAssembly::get_rb_eim_construction()
+RBEIMConstruction & SideRBEIMAssembly::get_rb_eim_construction()
 {
   return _rb_eim_con;
 }

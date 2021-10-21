@@ -16,7 +16,7 @@
 
 // rbOOmit includes
 #include "libmesh/rb_assembly_expansion.h"
-#include "libmesh/rb_eim_theta.h"
+#include "libmesh/rb_eim_theta_base.h"
 #include "libmesh/rb_parametrized_function.h"
 
 // C++ includes

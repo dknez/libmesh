@@ -19,7 +19,7 @@
 
 // rbOOmit includes
 #include "libmesh/rb_eim_evaluation.h"
-#include "libmesh/rb_eim_theta.h"
+#include "libmesh/rb_eim_theta_base.h"
 #include "libmesh/rb_parametrized_function.h"
 #include "libmesh/rb_evaluation.h"
 #include "libmesh/utility.h" // Utility::mkdir

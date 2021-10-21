@@ -19,7 +19,7 @@
 
 // rbOOmit includes
 #include "libmesh/rb_eim_evaluation_base.h"
-#include "libmesh/rb_eim_theta.h"
+#include "libmesh/rb_eim_theta_base.h"
 #include "libmesh/rb_parametrized_function.h"
 #include "libmesh/rb_evaluation.h"
 #include "libmesh/utility.h" // Utility::mkdir
@@ -186,7 +186,7 @@ void RBEIMEvaluationBase::rb_eim_solves(const std::vector<RBParameters> & mus,
 
 std::unique_ptr<RBTheta> RBEIMEvaluationBase::build_eim_theta(unsigned int index)
 {
-  return libmesh_make_unique<RBEIMTheta>(*this, index);
+  return libmesh_make_unique<RBEIMThetaBase>(*this, index);
 }
 
 void RBEIMEvaluationBase::initialize_eim_theta_objects()

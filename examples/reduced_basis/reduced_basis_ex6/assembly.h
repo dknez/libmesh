@@ -17,7 +17,7 @@
 #include "libmesh/rb_assembly_expansion.h"
 #include "libmesh/rb_parametrized_function.h"
 #include "libmesh/rb_eim_construction.h"
-#include "libmesh/rb_eim_theta.h"
+#include "libmesh/rb_eim_theta_base.h"
 
 // Bring in bits from the libMesh namespace.
 // Just the bits we're using, since this is a header.
