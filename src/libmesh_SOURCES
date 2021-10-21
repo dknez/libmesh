@@ -348,6 +348,7 @@ libmesh_SOURCES =  \
         src/reduced_basis/rb_theta.C \
         src/reduced_basis/rb_theta_expansion.C \
         src/reduced_basis/side_rb_eim_assembly.C \
+        src/reduced_basis/side_rb_eim_construction.C \
         src/reduced_basis/side_rb_eim_evaluation.C \
         src/reduced_basis/side_rb_parametrized_function.C \
         src/reduced_basis/transient_rb_assembly_expansion.C \
