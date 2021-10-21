@@ -17,8 +17,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#ifndef LIBMESH_RB_EIM_THETA_H
-#define LIBMESH_RB_EIM_THETA_H
+#ifndef LIBMESH_RB_EIM_THETA_BASE_H
+#define LIBMESH_RB_EIM_THETA_BASE_H
 
 // rbOOmit includes
 #include "libmesh/rb_theta.h"
@@ -39,40 +39,40 @@ class RBEIMEvaluationBase;
  * \author David J. Knezevic
  * \date 2011
  */
-class RBEIMTheta : public RBTheta
+class RBEIMThetaBase : public RBTheta
 {
 public:
 
   /**
    * Constructor.
    */
-  RBEIMTheta(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in);
+  RBEIMThetaBase(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in);
 
   /**
    * Special functions.
    * This class contains a reference, so it can't be default
    * copy/move-assigned.
    */
-  RBEIMTheta (RBEIMTheta &&) = default;
-  RBEIMTheta (const RBEIMTheta &) = default;
-  RBEIMTheta & operator= (const RBEIMTheta &) = delete;
-  RBEIMTheta & operator= (RBEIMTheta &&) = delete;
-  ~RBEIMTheta() = default;
+  RBEIMThetaBase (RBEIMThetaBase &&) = default;
+  RBEIMThetaBase (const RBEIMThetaBase &) = default;
+  RBEIMThetaBase & operator= (const RBEIMThetaBase &) = delete;
+  RBEIMThetaBase & operator= (RBEIMThetaBase &&) = delete;
+  ~RBEIMThetaBase() = default;
 
   /**
-   * Evaluate this RBEIMTheta object at the parameter \p mu.
+   * Evaluate this RBEIMThetaBase object at the parameter \p mu.
    * This entails solving the RB EIM approximation and picking
    * out the appropriate coefficient.
    */
   virtual Number evaluate(const RBParameters & mu) override;
 
   /**
-   * Evaluate this RBEIMTheta at all parameters in \p mus.
+   * Evaluate this RBEIMThetaBase at all parameters in \p mus.
    */
   virtual std::vector<Number> evaluate_vec(const std::vector<RBParameters> & mus) override;
 
   /**
-   * The RBEIMEvaluation object that this RBEIMTheta is based on.
+   * The RBEIMEvaluation object that this RBEIMThetaBase is based on.
    */
   RBEIMEvaluationBase & rb_eim_eval;
 
@@ -85,4 +85,4 @@ public:
 
 }
 
-#endif // LIBMESH_RB_EIM_THETA_H
+#endif // LIBMESH_RB_EIM_THETA_BASE_H

@@ -17,21 +17,21 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#include "libmesh/rb_eim_theta.h"
+#include "libmesh/rb_eim_theta_base.h"
 #include "libmesh/rb_parameters.h"
 #include "libmesh/rb_eim_evaluation_base.h"
 
 namespace libMesh
 {
 
-RBEIMTheta::RBEIMTheta(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in)
+RBEIMThetaBase::RBEIMThetaBase(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in)
   :
   rb_eim_eval(rb_eim_eval_in),
   index(index_in)
 {
 }
 
-Number RBEIMTheta::evaluate(const RBParameters & mu)
+Number RBEIMThetaBase::evaluate(const RBParameters & mu)
 {
   std::vector<RBParameters> mus {mu};
   std::vector<Number> values = evaluate_vec(mus);
@@ -40,7 +40,7 @@ Number RBEIMTheta::evaluate(const RBParameters & mu)
   return values[0];
 }
 
-std::vector<Number> RBEIMTheta::evaluate_vec(const std::vector<RBParameters> & mus)
+std::vector<Number> RBEIMThetaBase::evaluate_vec(const std::vector<RBParameters> & mus)
 {
   rb_eim_eval.rb_eim_solves(mus, rb_eim_eval.get_n_basis_functions());
   return rb_eim_eval.get_rb_eim_solutions_entries(index);

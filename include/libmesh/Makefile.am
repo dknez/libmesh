@@ -328,7 +328,7 @@ BUILT_SOURCES = \
         rb_eim_construction_base.h \
         rb_eim_evaluation.h \
         rb_eim_evaluation_base.h \
-        rb_eim_theta.h \
+        rb_eim_theta_base.h \
         rb_evaluation.h \
         rb_parameters.h \
         rb_parametrized.h \
@@ -339,6 +339,7 @@ BUILT_SOURCES = \
         rb_temporal_discretization.h \
         rb_theta.h \
         rb_theta_expansion.h \
+        side_rb_eim_assembly.h \
         side_rb_eim_evaluation.h \
         side_rb_parametrized_function.h \
         transient_rb_assembly_expansion.h \
@@ -1540,7 +1541,7 @@ rb_eim_evaluation.h: $(top_srcdir)/include/reduced_basis/rb_eim_evaluation.h
 rb_eim_evaluation_base.h: $(top_srcdir)/include/reduced_basis/rb_eim_evaluation_base.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
-rb_eim_theta.h: $(top_srcdir)/include/reduced_basis/rb_eim_theta.h
+rb_eim_theta_base.h: $(top_srcdir)/include/reduced_basis/rb_eim_theta_base.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_evaluation.h: $(top_srcdir)/include/reduced_basis/rb_evaluation.h
@@ -1571,6 +1572,9 @@ rb_theta.h: $(top_srcdir)/include/reduced_basis/rb_theta.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_theta_expansion.h: $(top_srcdir)/include/reduced_basis/rb_theta_expansion.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
+side_rb_eim_assembly.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_assembly.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 side_rb_eim_evaluation.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_evaluation.h
