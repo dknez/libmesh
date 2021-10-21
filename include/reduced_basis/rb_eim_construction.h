@@ -128,15 +128,6 @@ protected:
   virtual void update_eim_matrices() override;
 
   /**
-   * We compute the best fit of parametrized_function
-   * into the EIM space and then evaluate the error
-   * in the norm defined by inner_product_matrix.
-   *
-   * \returns The error in the best fit
-   */
-  virtual Real compute_best_fit_error() override;
-
-  /**
    * Compute and store the parametrized function for each
    * parameter in the training set at all the stored qp locations.
    */
