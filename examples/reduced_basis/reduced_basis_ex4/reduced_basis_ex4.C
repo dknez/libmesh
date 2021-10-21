@@ -144,12 +144,12 @@ int main (int argc, char ** argv)
         eim_construction.set_rb_eim_evaluation(eim_rb_eval);
 
         // Read data from input file and print state
-        eim_construction.process_parameters_file(eim_rb_eval.get_parametrized_function(), eim_parameters);
+        eim_construction.process_parameters_file(eim_rb_eval, eim_parameters);
         eim_construction.print_info();
 
         // Perform the EIM Greedy and write out the data
         eim_construction.initialize_eim_construction();
-        eim_construction.train_eim_approximation(eim_rb_eval, eim_rb_eval.get_parametrized_function());
+        eim_construction.train_eim_approximation(eim_rb_eval);
 
         RBDataSerialization::RBEIMEvaluationSerialization rb_eim_eval_writer(eim_rb_eval);
         rb_eim_eval_writer.write_to_file("rb_eim_eval.bin");

@@ -93,14 +93,14 @@ public:
    * Read parameters in from file and set up this system
    * accordingly.
    */
-  virtual void process_parameters_file (const RBParametrizedFunctionBase & parametrized_function,
+  virtual void process_parameters_file (const RBEIMEvaluationBase & rbe,
                                         const std::string & parameters_filename);
 
   /**
    * Set the state of this RBConstruction object based on the arguments
    * to this function.
    */
-  void set_rb_construction_parameters(const RBParametrizedFunctionBase & parametrized_function,
+  void set_rb_construction_parameters(const RBEIMEvaluationBase & rbe,
                                       unsigned int n_training_samples_in,
                                       bool deterministic_training_in,
                                       unsigned int training_parameters_random_seed_in,
@@ -129,8 +129,7 @@ public:
    * Generate the EIM approximation for the specified parametrized function.
    * Return the final tolerance from the training algorithm.
    */
-  Real train_eim_approximation(RBEIMEvaluationBase & rbe,
-                               const RBParametrizedFunctionBase & parametrized_function);
+  Real train_eim_approximation(RBEIMEvaluationBase & rbe);
 
   /**
    * Build a vector of ElemAssembly objects that accesses the basis

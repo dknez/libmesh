@@ -173,7 +173,7 @@ void RBEIMConstructionBase::initialize_eim_construction()
   initialize_parametrized_functions_in_training_set();
 }
 
-void RBEIMConstructionBase::process_parameters_file (const RBParametrizedFunctionBase & parametrized_function,
+void RBEIMConstructionBase::process_parameters_file (const RBEIMEvaluationBase & rbe,
                                                      const std::string & parameters_filename)
 {
   // First read in data from input_filename
@@ -238,7 +238,7 @@ void RBEIMConstructionBase::process_parameters_file (const RBParametrizedFunctio
     log_scaling_in[pr.first] = false;
 
   // Set the parameters that have been read in
-  set_rb_construction_parameters(parametrized_function,
+  set_rb_construction_parameters(rbe,
                                  n_training_samples,
                                  deterministic_training,
                                  training_parameters_random_seed_in,
@@ -252,7 +252,7 @@ void RBEIMConstructionBase::process_parameters_file (const RBParametrizedFunctio
                                  log_scaling_in);
 }
 
-void RBEIMConstructionBase::set_rb_construction_parameters(const RBParametrizedFunctionBase & parametrized_function,
+void RBEIMConstructionBase::set_rb_construction_parameters(const RBEIMEvaluationBase & rbe,
                                                            unsigned int n_training_samples_in,
                                                            bool deterministic_training_in,
                                                            unsigned int training_parameters_random_seed_in,
@@ -280,10 +280,9 @@ void RBEIMConstructionBase::set_rb_construction_parameters(const RBParametrizedF
   set_rel_training_tolerance(rel_training_tolerance_in);
   set_abs_training_tolerance(abs_training_tolerance_in);
 
-  if (parametrized_function.is_lookup_table)
+  if (rbe.is_parametrized_function_lookup_table())
     {
-      const std::string & lookup_table_param_name =
-        parametrized_function.lookup_table_param_name;
+      const std::string & lookup_table_param_name = rbe.get_lookup_table_param_name();
 
       libmesh_error_msg_if(!discrete_parameter_values_in.count(lookup_table_param_name),
         "Lookup table parameter should be discrete");
@@ -318,12 +317,11 @@ void RBEIMConstructionBase::set_rb_construction_parameters(const RBParametrizedF
     }
 
 
-  if (parametrized_function.is_lookup_table)
+  if (rbe.is_parametrized_function_lookup_table())
     {
       // Also, now that we've initialized the training set, overwrite the training
       // samples to ensure that we have full coverage of the lookup tbale.
-      const std::string & lookup_table_param_name =
-        parametrized_function.lookup_table_param_name;
+      const std::string & lookup_table_param_name = rbe.get_lookup_table_param_name();
 
       std::vector<Number> lookup_table_training_samples(n_training_samples_in);
       std::iota(lookup_table_training_samples.begin(), lookup_table_training_samples.end(), 0);
@@ -332,8 +330,7 @@ void RBEIMConstructionBase::set_rb_construction_parameters(const RBParametrizedF
     }
 }
 
-Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe,
-                                                    const RBParametrizedFunctionBase & parametrized_function)
+Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe)
 {
   LOG_SCOPE("train_eim_approximation()", "RBConstruction");
 
@@ -370,7 +367,7 @@ Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe,
       libMesh::out << std::endl << "---- Basis dimension: "
                    << rbe.get_n_basis_functions() << " ----" << std::endl;
 
-      if (parametrized_function.is_lookup_table &&
+      if (rbe.is_parametrized_function_lookup_table() &&
           best_fit_type_flag == EIM_BEST_FIT)
         {
           // If this is a lookup table and we're using "EIM best fit" then we
@@ -434,7 +431,7 @@ Real RBEIMConstructionBase::train_eim_approximation(RBEIMEvaluationBase & rbe,
       }
     } // end while(true)
 
-  if (parametrized_function.is_lookup_table &&
+  if (rbe.is_parametrized_function_lookup_table() &&
       best_fit_type_flag != EIM_BEST_FIT)
     {
       // We only enter here if best_fit_type_flag != EIM_BEST_FIT because we
