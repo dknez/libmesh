@@ -26,6 +26,8 @@
 namespace libMesh
 {
 
+class SideRBParametrizedFunction;
+
 /**
  * Evaluation class for EIM on element sides.
  */
@@ -66,13 +68,6 @@ public:
    * Get a const reference to the parametrized function.
    */
   SideRBParametrizedFunction & get_parametrized_function();
-
-  /**
-   * Build a theta object corresponding to EIM index \p index.
-   * The default implementation builds an RBEIMTheta object, possibly
-   * override in subclasses if we need more specialized behavior.
-   */
-  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) override;
 
   /**
    * Return the current number of EIM basis functions.
@@ -184,6 +179,13 @@ public:
                                bool read_binary_basis_functions = true);
 
 protected:
+
+  /**
+   * Evaluate the parametrized function at \p mus, and store the results
+   * in \p output_all_comps.
+   */
+  virtual void parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                         std::vector<std::vector<std::vector<Number>>> & output_all_comps) override;
 
   /**
    * Store the parametrized function that will be approximated

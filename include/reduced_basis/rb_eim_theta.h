@@ -29,7 +29,7 @@ namespace libMesh
 {
 
 class RBParameters;
-class RBEIMEvaluation;
+class RBEIMEvaluationBase;
 
 /**
  * This class provides functionality required to define an RBTheta
@@ -46,7 +46,7 @@ public:
   /**
    * Constructor.
    */
-  RBEIMTheta(RBEIMEvaluation & rb_eim_eval_in, unsigned int index_in);
+  RBEIMTheta(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in);
 
   /**
    * Special functions.
@@ -74,7 +74,7 @@ public:
   /**
    * The RBEIMEvaluation object that this RBEIMTheta is based on.
    */
-  RBEIMEvaluation & rb_eim_eval;
+  RBEIMEvaluationBase & rb_eim_eval;
 
   /**
    * The index of the RB_solution vector that we pick out

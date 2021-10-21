@@ -26,6 +26,8 @@
 namespace libMesh
 {
 
+class RBParametrizedFunction;
+
 /**
  * Evaluation class for EIM on element interiors.
  */
@@ -56,6 +58,17 @@ public:
   typedef std::map<dof_id_type, std::vector<std::vector<Number>>> QpDataMap;
 
   /**
+   * Indicate if the parametrized function for this RBEIMEvaluation is a lookup table or not.
+   */
+  virtual bool is_parametrized_function_lookup_table() const;
+
+  /**
+   * If this is a lookup table, return the lookup table's parameter
+   * name. If it's not a lookup table, throw an error.
+   */
+  virtual const std::string & get_lookup_table_param_name() const;
+
+  /**
    * Set the parametrized function that we will approximate
    * using the Empirical Interpolation Method. This object
    * will take ownership of the unique pointer.
@@ -63,16 +76,14 @@ public:
   void set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf);
 
   /**
-   * Get a const reference to the parametrized function.
+   * Get a non-const reference to the parametrized function.
    */
   RBParametrizedFunction & get_parametrized_function();
 
   /**
-   * Build a theta object corresponding to EIM index \p index.
-   * The default implementation builds an RBEIMTheta object, possibly
-   * override in subclasses if we need more specialized behavior.
+   * Get a const reference to the parametrized function.
    */
-  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) override;
+  const RBParametrizedFunction & get_parametrized_function() const;
 
   /**
    * Return the current number of EIM basis functions.
@@ -193,6 +204,14 @@ public:
                                            const std::string & directory_name = "offline_data");
 
 protected:
+
+
+  /**
+   * Evaluate the parametrized function at \p mus, and store the results
+   * in \p output_all_comps.
+   */
+  virtual void parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                         std::vector<std::vector<std::vector<Number>>> & output_all_comps) override;
 
   /**
    * Store the parametrized function that will be approximated

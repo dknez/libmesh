@@ -18,9 +18,9 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 // rbOOmit includes
-#include "libmesh/rb_eim_evaluation_base.h"
+#include "libmesh/side_rb_eim_evaluation.h"
 #include "libmesh/rb_eim_theta.h"
-#include "libmesh/rb_parametrized_function.h"
+#include "libmesh/side_rb_parametrized_function.h"
 #include "libmesh/rb_evaluation.h"
 #include "libmesh/utility.h" // Utility::mkdir
 
@@ -45,7 +45,7 @@ namespace libMesh
 
 SideRBEIMEvaluation::SideRBEIMEvaluation(const Parallel::Communicator & comm)
 :
-SideRBEIMEvaluationBase(comm)
+RBEIMEvaluationBase(comm)
 {
 }
 
@@ -61,11 +61,6 @@ SideRBParametrizedFunction & SideRBEIMEvaluation::get_parametrized_function()
   libmesh_error_msg_if(!_parametrized_function, "Parametrized function not initialized yet");
 
   return *_parametrized_function;
-}
-
-std::unique_ptr<RBTheta> SideRBEIMEvaluation::build_eim_theta(unsigned int index)
-{
-  return libmesh_make_unique<RBEIMTheta>(*this, index);
 }
 
 unsigned int SideRBEIMEvaluation::get_n_basis_functions() const
@@ -219,8 +214,8 @@ void SideRBEIMEvaluation::add_basis_function_and_interpolation_data(
 }
 
 void SideRBEIMEvaluation::
-write_out_basis_functions(const std::string & directory_name,
-                          bool write_binary_basis_functions)
+write_out_basis_functions(const std::string & /*directory_name*/,
+                          bool /*write_binary_basis_functions*/)
 {
   LOG_SCOPE("write_out_basis_functions()", "SideRBEIMEvaluation");
 
@@ -336,9 +331,9 @@ write_out_basis_functions(const std::string & directory_name,
 }
 
 void SideRBEIMEvaluation::
-read_in_basis_functions(const System & sys,
-                        const std::string & directory_name,
-                        bool read_binary_basis_functions)
+read_in_basis_functions(const System & /*sys*/,
+                        const std::string & /*directory_name*/,
+                        bool /*read_binary_basis_functions*/)
 {
   LOG_SCOPE("read_in_basis_functions()", "SideRBEIMEvaluation");
 
@@ -604,7 +599,7 @@ void SideRBEIMEvaluation::gather_bfs()
 
 
 
-void SideRBEIMEvaluation::distribute_bfs(const System & sys)
+void SideRBEIMEvaluation::distribute_bfs(const System & /*sys*/)
 {
   // // So we can avoid calling these many times below
   // auto n_procs = sys.comm().size();
@@ -825,6 +820,20 @@ void SideRBEIMEvaluation::distribute_bfs(const System & sys)
   //           } // end for (e)
   //       } // end for proc_id
   //   } // if (rank == 0)
+}
+
+void SideRBEIMEvaluation::parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                                    std::vector<std::vector<std::vector<Number>>> & output_all_comps)
+{
+  get_parametrized_function().vectorized_evaluate(mus,
+                                                 _interpolation_points_xyz,
+                                                 _interpolation_points_elem_id,
+                                                 _interpolation_points_side_index,
+                                                 _interpolation_points_qp,
+                                                 _interpolation_points_boundary_id,
+                                                 _interpolation_points_xyz_perturbations,
+                                                 _interpolation_points_phi_i_qp,
+                                                 output_all_comps);
 }
 
 } // namespace libMesh

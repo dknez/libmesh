@@ -102,8 +102,7 @@ DenseVector<Number> RBEIMEvaluationBase::rb_eim_solve(DenseVector<Number> & EIM_
   return rb_eim_solution;
 }
 
-void RBEIMEvaluationBase::rb_eim_solves(RBParametrizedFunction & parametrized_function,
-                                        const std::vector<RBParameters> & mus,
+void RBEIMEvaluationBase::rb_eim_solves(const std::vector<RBParameters> & mus,
                                         unsigned int N)
 {
   if (_preserve_rb_eim_solutions)
@@ -129,13 +128,13 @@ void RBEIMEvaluationBase::rb_eim_solves(RBParametrizedFunction & parametrized_fu
   _rb_eim_solves_mus = mus;
   _rb_eim_solves_N = N;
 
-  if (parametrized_function.is_lookup_table)
+  if (is_parametrized_function_lookup_table())
     {
       _rb_eim_solutions.resize(mus.size());
       for (auto mu_index : index_range(mus))
         {
           Real lookup_table_param =
-            mus[mu_index].get_value(parametrized_function.lookup_table_param_name);
+            mus[mu_index].get_value(get_lookup_table_param_name());
 
           // Cast lookup_table_param to an unsigned integer so that we can use
           // it as an index into the EIM rhs values obtained from the lookup table.
@@ -153,14 +152,7 @@ void RBEIMEvaluationBase::rb_eim_solves(RBParametrizedFunction & parametrized_fu
   // output all comps indexing is as follows:
   //   mu index --> interpolation point index --> component index --> value.
   std::vector<std::vector<std::vector<Number>>> output_all_comps;
-  parametrized_function.vectorized_evaluate(mus,
-                                            _interpolation_points_xyz,
-                                            _interpolation_points_elem_id,
-                                            _interpolation_points_qp,
-                                            _interpolation_points_subdomain_id,
-                                            _interpolation_points_xyz_perturbations,
-                                            _interpolation_points_phi_i_qp,
-                                            output_all_comps);
+  parametrized_function_vectorized_evaluate(mus, output_all_comps);
 
   std::vector<std::vector<Number>> evaluated_values_at_interp_points(output_all_comps.size());
 
@@ -190,6 +182,11 @@ void RBEIMEvaluationBase::rb_eim_solves(RBParametrizedFunction & parametrized_fu
 
       interpolation_matrix_N.lu_solve(EIM_rhs, _rb_eim_solutions[mu_index]);
     }
+}
+
+std::unique_ptr<RBTheta> RBEIMEvaluationBase::build_eim_theta(unsigned int index)
+{
+  return libmesh_make_unique<RBEIMTheta>(*this, index);
 }
 
 void RBEIMEvaluationBase::initialize_eim_theta_objects()

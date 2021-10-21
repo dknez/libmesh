@@ -38,7 +38,6 @@ namespace libMesh
 {
 
 class RBParameters;
-class RBParametrizedFunction;
 class RBTheta;
 class System;
 class Elem;
@@ -85,6 +84,18 @@ public:
   void resize_data_structures(const unsigned int Nmax);
 
   /**
+   * Pure virtual function to indicate if the parametrized function
+   * for this RBEIMEvaluation is a lookup table or not.
+   */
+  virtual bool is_parametrized_function_lookup_table() const = 0;
+
+  /**
+   * If this is a lookup table, return the lookup table's parameter
+   * name. If it's not a lookup table, throw an error.
+   */
+  virtual const std::string & get_lookup_table_param_name() const = 0;
+
+  /**
    * Calculate the EIM approximation for the given
    * right-hand side vector \p EIM_rhs. Store the
    * solution coefficients in the member _eim_solution.
@@ -95,8 +106,7 @@ public:
    * Perform rb_eim_solves at each mu in \p mus and store the results
    * in _rb_eim_solutions.
    */
-  void rb_eim_solves(RBParametrizedFunction & parametrized_function,
-                     const std::vector<RBParameters> & mus,
+  void rb_eim_solves(const std::vector<RBParameters> & mus,
                      unsigned int N);
 
   /**
@@ -131,7 +141,7 @@ public:
    * The default implementation builds an RBEIMTheta object, possibly
    * override in subclasses if we need more specialized behavior.
    */
-  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index) = 0;
+  virtual std::unique_ptr<RBTheta> build_eim_theta(unsigned int index);
 
   /**
    * Set _rb_eim_solutions. Normally we update _rb_eim_solutions by performing
@@ -255,6 +265,16 @@ public:
   virtual bool scale_components_in_enrichment() const;
 
 protected:
+
+  /**
+   * Evaluate the parametrized function at \p mus, and store the results
+   * in \p output_all_comps.
+   *
+   * Override this method in subclasses in order to evaluate based on the
+   * relevant type of parametrized function.
+   */
+  virtual void parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                         std::vector<std::vector<std::vector<Number>>> & output_all_comps) = 0;
 
   /**
    * The EIM solution coefficients from the most recent call to rb_eim_solves().

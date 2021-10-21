@@ -19,12 +19,12 @@
 
 #include "libmesh/rb_eim_theta.h"
 #include "libmesh/rb_parameters.h"
-#include "libmesh/rb_eim_evaluation.h"
+#include "libmesh/rb_eim_evaluation_base.h"
 
 namespace libMesh
 {
 
-RBEIMTheta::RBEIMTheta(RBEIMEvaluation & rb_eim_eval_in, unsigned int index_in)
+RBEIMTheta::RBEIMTheta(RBEIMEvaluationBase & rb_eim_eval_in, unsigned int index_in)
   :
   rb_eim_eval(rb_eim_eval_in),
   index(index_in)
@@ -42,7 +42,7 @@ Number RBEIMTheta::evaluate(const RBParameters & mu)
 
 std::vector<Number> RBEIMTheta::evaluate_vec(const std::vector<RBParameters> & mus)
 {
-  rb_eim_eval.rb_eim_solves(rb_eim_eval.get_parametrized_function(), mus, rb_eim_eval.get_n_basis_functions());
+  rb_eim_eval.rb_eim_solves(mus, rb_eim_eval.get_n_basis_functions());
   return rb_eim_eval.get_rb_eim_solutions_entries(index);
 }
 

@@ -203,8 +203,7 @@ std::pair<Real,unsigned int> RBEIMConstruction::compute_max_eim_error()
           training_parameters_copy[training_index] = get_params_from_training_set(training_index);
         }
 
-      get_rb_eim_evaluation().rb_eim_solves(get_rb_eim_evaluation().get_parametrized_function(),
-                                            training_parameters_copy,
+      get_rb_eim_evaluation().rb_eim_solves(training_parameters_copy,
                                             RB_size);
       const std::vector<DenseVector<Number>> & rb_eim_solutions = get_rb_eim_evaluation().get_rb_eim_solutions();
 

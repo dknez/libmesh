@@ -51,6 +51,18 @@ RBEIMEvaluationBase(comm)
 
 RBEIMEvaluation::~RBEIMEvaluation() = default;
 
+bool RBEIMEvaluation::is_parametrized_function_lookup_table() const
+{
+  return get_parametrized_function().is_lookup_table;
+}
+
+const std::string & RBEIMEvaluation::get_lookup_table_param_name() const
+{
+  libmesh_error_msg_if(!is_parametrized_function_lookup_table(), "We expected a lookup table");
+
+  return get_parametrized_function().lookup_table_param_name;
+}
+
 void RBEIMEvaluation::set_parametrized_function(std::unique_ptr<RBParametrizedFunction> pf)
 {
   _parametrized_function = std::move(pf);
@@ -63,9 +75,11 @@ RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function()
   return *_parametrized_function;
 }
 
-std::unique_ptr<RBTheta> RBEIMEvaluation::build_eim_theta(unsigned int index)
+const RBParametrizedFunction & RBEIMEvaluation::get_parametrized_function() const
 {
-  return libmesh_make_unique<RBEIMTheta>(*this, index);
+  libmesh_error_msg_if(!_parametrized_function, "Parametrized function not initialized yet");
+
+  return *_parametrized_function;
 }
 
 unsigned int RBEIMEvaluation::get_n_basis_functions() const
@@ -936,6 +950,19 @@ void RBEIMEvaluation::write_out_projected_basis_functions(System & sys,
                                       directory_name,
                                       "projected_bf_var_" + std::to_string(eim_var));
     }
+}
+
+void RBEIMEvaluation::parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
+                                                                std::vector<std::vector<std::vector<Number>>> & output_all_comps)
+{
+  get_parametrized_function().vectorized_evaluate(mus,
+                                                 _interpolation_points_xyz,
+                                                 _interpolation_points_elem_id,
+                                                 _interpolation_points_qp,
+                                                 _interpolation_points_subdomain_id,
+                                                 _interpolation_points_xyz_perturbations,
+                                                 _interpolation_points_phi_i_qp,
+                                                 output_all_comps);
 }
 
 } // namespace libMesh
