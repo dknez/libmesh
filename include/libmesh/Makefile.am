@@ -339,6 +339,7 @@ BUILT_SOURCES = \
         rb_temporal_discretization.h \
         rb_theta.h \
         rb_theta_expansion.h \
+        side_rb_eim_evaluation.h \
         side_rb_parametrized_function.h \
         transient_rb_assembly_expansion.h \
         transient_rb_construction.h \
@@ -1570,6 +1571,9 @@ rb_theta.h: $(top_srcdir)/include/reduced_basis/rb_theta.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 rb_theta_expansion.h: $(top_srcdir)/include/reduced_basis/rb_theta_expansion.h
+	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
+
+side_rb_eim_evaluation.h: $(top_srcdir)/include/reduced_basis/side_rb_eim_evaluation.h
 	$(AM_V_GEN)rm -f $@ && $(LN_S) -f $< $@
 
 side_rb_parametrized_function.h: $(top_srcdir)/include/reduced_basis/side_rb_parametrized_function.h
