@@ -196,12 +196,12 @@ int main (int argc, char ** argv)
         eim_construction.set_rb_eim_evaluation(eim_rb_eval);
 
         // Read data from input file and print state
-        eim_construction.process_parameters_file(eim_parameters);
+        eim_construction.process_parameters_file(eim_rb_eval.get_parametrized_function(), eim_parameters);
         eim_construction.print_info();
 
         // Perform the EIM Greedy and write out the data
         eim_construction.initialize_eim_construction();
-        eim_construction.train_eim_approximation();
+        eim_construction.train_eim_approximation(eim_rb_eval, eim_rb_eval.get_parametrized_function());
 
         RBDataSerialization::RBEIMEvaluationSerialization rb_eim_eval_writer(eim_rb_eval);
         rb_eim_eval_writer.write_to_file("rb_eim_eval.bin");
@@ -250,7 +250,7 @@ int main (int argc, char ** argv)
         rb_eval.get_rb_theta_expansion().attach_multiple_A_theta(eim_rb_eval.get_eim_theta_objects());
 
         // attach the EIM assembly objects to the RBConstruction
-        eim_construction.initialize_eim_assembly_objects();
+        eim_construction.initialize_eim_assembly_objects(eim_rb_eval);
         rb_construction.get_rb_assembly_expansion().attach_multiple_A_assembly(eim_construction.get_eim_assembly_objects());
 
         // Print out the state of rb_construction now that the EIM objects have been attached
