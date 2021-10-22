@@ -214,239 +214,250 @@ void SideRBEIMEvaluation::add_basis_function_and_interpolation_data(
 }
 
 void SideRBEIMEvaluation::
-write_out_basis_functions(const std::string & /*directory_name*/,
-                          bool /*write_binary_basis_functions*/)
+write_out_basis_functions(const std::string & directory_name,
+                          bool write_binary_basis_functions)
 {
   LOG_SCOPE("write_out_basis_functions()", "SideRBEIMEvaluation");
 
-  // // Quick return if there is no work to do. Note: make sure all procs
-  // // agree there is no work to do.
-  // bool is_empty = _local_eim_basis_functions.empty();
-  // this->comm().verify(is_empty);
+  // Quick return if there is no work to do. Note: make sure all procs
+  // agree there is no work to do.
+  bool is_empty = _local_eim_basis_functions.empty();
+  this->comm().verify(is_empty);
 
-  // if (is_empty)
-  //   return;
+  if (is_empty)
+    return;
 
-  // // Gather basis function data from other procs, storing it in
-  // // _local_eim_basis_functions, so that we can then print everything
-  // // from processor 0.
-  // this->gather_bfs();
+  // Gather basis function data from other procs, storing it in
+  // _local_eim_basis_functions, so that we can then print everything
+  // from processor 0.
+  this->gather_bfs();
 
-  // // Write values from processor 0 only.
-  // if (this->processor_id() == 0)
-  //   {
-  //     // Make a directory to store all the data files
-  //     Utility::mkdir(directory_name.c_str());
+  // Write values from processor 0 only.
+  if (this->processor_id() == 0)
+    {
+      // Make a directory to store all the data files
+      Utility::mkdir(directory_name.c_str());
 
-  //     // Create filename
-  //     std::ostringstream file_name;
-  //     const std::string basis_function_suffix = (write_binary_basis_functions ? ".xdr" : ".dat");
-  //     file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
+      // Create filename
+      std::ostringstream file_name;
+      const std::string basis_function_suffix = (write_binary_basis_functions ? ".xdr" : ".dat");
+      file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
 
-  //     // Create XDR writer object
-  //     Xdr xdr(file_name.str(), write_binary_basis_functions ? ENCODE : WRITE);
+      // Create XDR writer object
+      Xdr xdr(file_name.str(), write_binary_basis_functions ? ENCODE : WRITE);
 
-  //     // Write number of basis functions to file. Note: the
-  //     // Xdr::data() function takes non-const references, so you can't
-  //     // pass e.g. vec.size() to that interface.
-  //     auto n_bf = _local_eim_basis_functions.size();
-  //     xdr.data(n_bf, "# Number of basis functions");
+      // Write number of basis functions to file. Note: the
+      // Xdr::data() function takes non-const references, so you can't
+      // pass e.g. vec.size() to that interface.
+      auto n_bf = _local_eim_basis_functions.size();
+      xdr.data(n_bf, "# Number of basis functions");
 
-  //     // We assume that each basis function has data for the same
-  //     // number of elements as basis function 0, which is equal to the
-  //     // size of the map.
-  //     auto n_elem = _local_eim_basis_functions[0].size();
-  //     xdr.data(n_elem, "# Number of elements");
+      // We assume that each basis function has data for the same
+      // number of (elem,side) pairs as basis function 0, which is equal to the
+      // size of the map.
+      auto n_elem = _local_eim_basis_functions[0].size();
+      xdr.data(n_elem, "# Number of (elem,side) pairs");
 
-  //     // We assume that each element has the same number of variables,
-  //     // and we get the number of vars from the first element of the
-  //     // first basis function.
-  //     auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
-  //     xdr.data(n_vars, "# Number of variables");
+      // We assume that each element has the same number of variables,
+      // and we get the number of vars from the first element of the
+      // first basis function.
+      auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
+      xdr.data(n_vars, "# Number of variables");
 
-  //     // We assume that the list of elements for each basis function
-  //     // is the same as basis function 0. We also assume that all vars
-  //     // have the same number of qps.
-  //     std::vector<unsigned int> n_qp_per_elem;
-  //     n_qp_per_elem.reserve(n_elem);
-  //     dof_id_type expected_elem_id = 0;
-  //     for (const auto & pr : _local_eim_basis_functions[0])
-  //       {
-  //         // Note: Currently we require that the Elems are numbered
-  //         // contiguously from [0..n_elem).  This allows us to avoid
-  //         // writing the Elem ids to the Xdr file, but if we need to
-  //         // generalize this assumption later, we can.
-  //         const auto & actual_elem_id = pr.first;
+      // We write out the following arrays:
+      // - element IDs
+      // - side indices
+      // - n_qp_per_elem_side
+      std::vector<unsigned int> n_qp_per_elem_side;
+      std::vector<unsigned int> elem_ids;
+      std::vector<unsigned int> side_indices;
+      elem_ids.reserve(n_elem);
+      side_indices.reserve(n_elem);
+      n_qp_per_elem_side.reserve(n_elem);
+      for (const auto & pr : _local_eim_basis_functions[0])
+        {
+          const auto & elem_side_pair = pr.first;
+          elem_ids.push_back(elem_side_pair.first);
+          side_indices.push_back(elem_side_pair.second);
 
-  //         libmesh_error_msg_if(actual_elem_id != expected_elem_id++,
-  //                              "SideRBEIMEvaluation currently assumes a contiguous Elem numbering starting from 0.");
+          // array[n_vars][n_qp] per Elem. We get the number of QPs
+          // for variable 0, assuming they are all the same.
+          const auto & array = pr.second;
+          n_qp_per_elem_side.push_back(array[0].size());
+        }
+      xdr.data(elem_ids, "# Elem IDs");
+      xdr.data(side_indices, "# Side indices");
+      xdr.data(n_qp_per_elem_side, "# Number of QPs per Elem");
 
-  //         // array[n_vars][n_qp] per Elem. We get the number of QPs
-  //         // for variable 0, assuming they are all the same.
-  //         const auto & array = pr.second;
-  //         n_qp_per_elem.push_back(array[0].size());
-  //       }
-  //     xdr.data(n_qp_per_elem, "# Number of QPs per Elem");
+      // The total amount of qp data for each var is the sum of the
+      // entries in the "n_qp_per_elem" array.
+      auto n_qp_data =
+        std::accumulate(n_qp_per_elem_side.begin(),
+                        n_qp_per_elem_side.end(),
+                        0u);
 
-  //     // The total amount of qp data for each var is the sum of the
-  //     // entries in the "n_qp_per_elem" array.
-  //     auto n_qp_data =
-  //       std::accumulate(n_qp_per_elem.begin(),
-  //                       n_qp_per_elem.end(),
-  //                       0u);
+      // Reserve space to store continguous vectors of qp data for each var
+      std::vector<std::vector<Number>> qp_data(n_vars);
+      for (auto var : index_range(qp_data))
+        qp_data[var].reserve(n_qp_data);
 
-  //     // Reserve space to store continguous vectors of qp data for each var
-  //     std::vector<std::vector<Number>> qp_data(n_vars);
-  //     for (auto var : index_range(qp_data))
-  //       qp_data[var].reserve(n_qp_data);
+      // Now we construct a vector for each basis function, for each
+      // variable which is ordered according to:
+      // [ [qp vals for Elem 0], [qp vals for Elem 1], ... [qp vals for Elem N] ]
+      // and write it to file.
+      for (auto bf : index_range(_local_eim_basis_functions))
+        {
+          // Clear any data from previous bf
+          for (auto var : index_range(qp_data))
+            qp_data[var].clear();
 
-  //     // Now we construct a vector for each basis function, for each
-  //     // variable which is ordered according to:
-  //     // [ [qp vals for Elem 0], [qp vals for Elem 1], ... [qp vals for Elem N] ]
-  //     // and write it to file.
-  //     for (auto bf : index_range(_local_eim_basis_functions))
-  //       {
-  //         // Clear any data from previous bf
-  //         for (auto var : index_range(qp_data))
-  //           qp_data[var].clear();
+          for (const auto & pr : _local_eim_basis_functions[bf])
+            {
+              // array[n_vars][n_qp] per Elem
+              const auto & array = pr.second;
+              for (auto var : index_range(array))
+                {
+                  // Insert all qp values for this var
+                  qp_data[var].insert(/*insert at*/qp_data[var].end(),
+                                      /*data start*/array[var].begin(),
+                                      /*data end*/array[var].end());
+                }
+            }
 
-  //         for (const auto & pr : _local_eim_basis_functions[bf])
-  //           {
-  //             // array[n_vars][n_qp] per Elem
-  //             const auto & array = pr.second;
-  //             for (auto var : index_range(array))
-  //               {
-  //                 // Insert all qp values for this var
-  //                 qp_data[var].insert(/*insert at*/qp_data[var].end(),
-  //                                     /*data start*/array[var].begin(),
-  //                                     /*data end*/array[var].end());
-  //               }
-  //           }
-
-  //         // Write all the var values for this bf
-  //         for (auto var : index_range(qp_data))
-  //           xdr.data_stream(qp_data[var].data(), qp_data[var].size(), /*line_break=*/qp_data[var].size());
-  //       }
-  //   }
+          // Write all the var values for this bf
+          for (auto var : index_range(qp_data))
+            xdr.data_stream(qp_data[var].data(), qp_data[var].size(), /*line_break=*/qp_data[var].size());
+        }
+    }
 }
 
 void SideRBEIMEvaluation::
-read_in_basis_functions(const System & /*sys*/,
-                        const std::string & /*directory_name*/,
-                        bool /*read_binary_basis_functions*/)
+read_in_basis_functions(const System & sys,
+                        const std::string & directory_name,
+                        bool read_binary_basis_functions)
 {
   LOG_SCOPE("read_in_basis_functions()", "SideRBEIMEvaluation");
 
-  // // Read values on processor 0 only.
-  // if (sys.comm().rank() == 0)
-  //   {
-  //     // Create filename
-  //     std::ostringstream file_name;
-  //     const std::string basis_function_suffix = (read_binary_basis_functions ? ".xdr" : ".dat");
-  //     file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
+  // Read values on processor 0 only.
+  if (sys.comm().rank() == 0)
+    {
+      // Create filename
+      std::ostringstream file_name;
+      const std::string basis_function_suffix = (read_binary_basis_functions ? ".xdr" : ".dat");
+      file_name << directory_name << "/" << "bf_data" << basis_function_suffix;
 
-  //     // Create XDR reader object
-  //     Xdr xdr(file_name.str(), read_binary_basis_functions ? DECODE : READ);
+      // Create XDR reader object
+      Xdr xdr(file_name.str(), read_binary_basis_functions ? DECODE : READ);
 
-  //     // Read in the number of basis functions. The comment parameter
-  //     // is ignored when reading.
-  //     std::size_t n_bf;
-  //     xdr.data(n_bf);
+      // Read in the number of basis functions. The comment parameter
+      // is ignored when reading.
+      std::size_t n_bf;
+      xdr.data(n_bf);
 
-  //     // Read in the number of elements
-  //     std::size_t n_elem;
-  //     xdr.data(n_elem);
+      // Read in the number of elements
+      std::size_t n_elem_side;
+      xdr.data(n_elem_side);
 
-  //     // Read in the number of variables.
-  //     std::size_t n_vars;
-  //     xdr.data(n_vars);
+      // Read in the number of variables.
+      std::size_t n_vars;
+      xdr.data(n_vars);
 
-  //     // Read in vector containing the number of QPs per elem. We can
-  //     // create this vector with the required size or let it be read
-  //     // from the file and sized for us.
-  //     std::vector<unsigned int> n_qp_per_elem(n_elem);
-  //     xdr.data(n_qp_per_elem);
+      std::vector<unsigned int> elem_ids(n_elem_side);
+      xdr.data(elem_ids);
+      std::vector<unsigned int> side_indices(n_elem_side);
+      xdr.data(side_indices);
 
-  //     // The total amount of qp data for each var is the sum of the
-  //     // entries in the "n_qp_per_elem" array.
-  //     auto n_qp_data =
-  //       std::accumulate(n_qp_per_elem.begin(),
-  //                       n_qp_per_elem.end(),
-  //                       0u);
+      // Read in vector containing the number of QPs per elem. We can
+      // create this vector with the required size or let it be read
+      // from the file and sized for us.
+      std::vector<unsigned int> n_qp_per_elem_side(n_elem_side);
+      xdr.data(n_qp_per_elem_side);
 
-  //     // Allocate space to store all required basis functions,
-  //     // clearing any data that may have been there previously.
-  //     //
-  //     // TODO: Do we need to also write out/read in Elem ids?
-  //     // Or can we assume they will always be contiguously
-  //     // numbered (at least on proc 0)?
-  //     _local_eim_basis_functions.clear();
-  //     _local_eim_basis_functions.resize(n_bf);
-  //     for (auto i : index_range(_local_eim_basis_functions))
-  //       for (std::size_t elem_id=0; elem_id<n_elem; ++elem_id)
-  //         {
-  //           auto & array = _local_eim_basis_functions[i][elem_id];
-  //           array.resize(n_vars);
-  //         }
+      // The total amount of qp data for each var is the sum of the
+      // entries in the "n_qp_per_elem" array.
+      auto n_qp_data =
+        std::accumulate(n_qp_per_elem_side.begin(),
+                        n_qp_per_elem_side.end(),
+                        0u);
 
-  //     // Allocate temporary storage for one var's worth of qp data.
-  //     std::vector<Number> qp_data;
+      // Allocate space to store all required basis functions,
+      // clearing any data that may have been there previously.
+      _local_eim_basis_functions.clear();
+      _local_eim_basis_functions.resize(n_bf);
+      for (auto i : index_range(_local_eim_basis_functions))
+        for (std::size_t elem_side_idx=0; elem_side_idx<n_elem_side; ++elem_side_idx)
+          {
+            unsigned int elem_id = elem_ids[elem_side_idx];
+            unsigned int side_index = side_indices[elem_side_idx];
+            auto elem_side_pair = std::make_pair(elem_id, side_index);
 
-  //     // Read in data for each basis function
-  //     for (auto i : index_range(_local_eim_basis_functions))
-  //       {
-  //         // Reference to the data map for the current basis function.
-  //         auto & bf_map = _local_eim_basis_functions[i];
+            auto & array = _local_eim_basis_functions[i][elem_side_pair];
+            array.resize(n_vars);
+          }
 
-  //         for (std::size_t var=0; var<n_vars; ++var)
-  //           {
-  //             qp_data.clear();
-  //             qp_data.resize(n_qp_data);
+      // Allocate temporary storage for one var's worth of qp data.
+      std::vector<Number> qp_data;
 
-  //             // Read data using data_stream() since that is
-  //             // (currently) how we write it out. The "line_break"
-  //             // parameter of data_stream() is ignored while reading.
-  //             xdr.data_stream(qp_data.data(), qp_data.size());
+      // Read in data for each basis function
+      for (auto i : index_range(_local_eim_basis_functions))
+        {
+          // Reference to the data map for the current basis function.
+          auto & bf_map = _local_eim_basis_functions[i];
 
-  //             // Iterate over the qp_data vector, filling in the
-  //             // "small" vectors for each Elem.
-  //             auto cursor = qp_data.begin();
-  //             for (std::size_t elem_id=0; elem_id<n_elem; ++elem_id)
-  //               {
-  //                 // Get reference to the [n_vars][n_qp] array for
-  //                 // this Elem. We assign() into the vector of
-  //                 // quadrature point values, which allocates space if
-  //                 // it doesn't already exist.
-  //                 auto & array = bf_map[elem_id];
-  //                 array[var].assign(cursor, cursor + n_qp_per_elem[elem_id]);
-  //                 std::advance(cursor, n_qp_per_elem[elem_id]);
-  //               }
-  //           } // end for (var)
-  //       } // end for (i)
-  //   } // end if processor 0
+          for (std::size_t var=0; var<n_vars; ++var)
+            {
+              qp_data.clear();
+              qp_data.resize(n_qp_data);
 
-  // // Distribute the basis function information to the processors that require it
-  // this->distribute_bfs(sys);
+              // Read data using data_stream() since that is
+              // (currently) how we write it out. The "line_break"
+              // parameter of data_stream() is ignored while reading.
+              xdr.data_stream(qp_data.data(), qp_data.size());
+
+              // Iterate over the qp_data vector, filling in the
+              // "small" vectors for each Elem.
+              auto cursor = qp_data.begin();
+              for (std::size_t elem_side_idx=0; elem_side_idx<n_elem_side; ++elem_side_idx)
+                {
+                  unsigned int elem_id = elem_ids[elem_side_idx];
+                  unsigned int side_index = side_indices[elem_side_idx];
+                  auto elem_side_pair = std::make_pair(elem_id, side_index);
+
+                  // Get reference to the [n_vars][n_qp] array for
+                  // this Elem. We assign() into the vector of
+                  // quadrature point values, which allocates space if
+                  // it doesn't already exist.
+                  auto & array = bf_map[elem_side_pair];
+                  array[var].assign(cursor, cursor + n_qp_per_elem_side[elem_side_idx]);
+                  std::advance(cursor, n_qp_per_elem_side[elem_side_idx]);
+                }
+            } // end for (var)
+        } // end for (i)
+    } // end if processor 0
+
+  // Distribute the basis function information to the processors that require it
+  this->distribute_bfs(sys);
 }
 
 void SideRBEIMEvaluation::print_local_eim_basis_functions() const
 {
-  // for (auto bf : index_range(_local_eim_basis_functions))
-  //   {
-  //     libMesh::out << "Basis function " << bf << std::endl;
-  //     for (const auto & pr : _local_eim_basis_functions[bf])
-  //       {
-  //         libMesh::out << "Elem " << pr.first << std::endl;
-  //         const auto & array = pr.second;
-  //         for (auto var : index_range(array))
-  //           {
-  //             libMesh::out << "Variable " << var << std::endl;
-  //             for (auto qp : index_range(array[var]))
-  //               libMesh::out << array[var][qp] << " ";
-  //             libMesh::out << std::endl;
-  //           }
-  //       }
-  //   }
+  for (auto bf : index_range(_local_eim_basis_functions))
+    {
+      libMesh::out << "Basis function " << bf << std::endl;
+      for (const auto & pr : _local_eim_basis_functions[bf])
+        {
+          const auto & elem_side_pair = pr.first;
+          libMesh::out << "Elem " << elem_side_pair.first << ", Side " << elem_side_pair.second << std::endl;
+          const auto & array = pr.second;
+          for (auto var : index_range(array))
+            {
+              libMesh::out << "Variable " << var << std::endl;
+              for (auto qp : index_range(array[var]))
+                libMesh::out << array[var][qp] << " ";
+              libMesh::out << std::endl;
+            }
+        }
+    }
 }
 
 void SideRBEIMEvaluation::gather_bfs()
