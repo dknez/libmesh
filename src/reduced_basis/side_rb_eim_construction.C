@@ -103,34 +103,35 @@ void SideRBEIMConstruction::store_eim_solutions_for_training_set()
 {
   LOG_SCOPE("store_eim_solutions_for_training_set()", "SideRBEIMConstruction");
 
-  // RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
+  SideRBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
-  // std::vector<DenseVector<Number>> & eim_solutions = get_rb_eim_evaluation().get_eim_solutions_for_training_set();
-  // eim_solutions.clear();
-  // eim_solutions.resize(get_n_training_samples());
-  // for (auto i : make_range(get_n_training_samples()))
-  //   {
-  //     const auto & local_pf = _local_parametrized_functions_for_training[i];
+  std::vector<DenseVector<Number>> & eim_solutions = get_rb_eim_evaluation().get_eim_solutions_for_training_set();
+  eim_solutions.clear();
+  eim_solutions.resize(get_n_training_samples());
+  for (auto i : make_range(get_n_training_samples()))
+    {
+      const auto & local_pf = _local_parametrized_functions_for_training[i];
 
-  //     unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
-  //     if (RB_size > 0)
-  //       {
-  //         // Get the right-hand side vector for the EIM approximation
-  //         // by sampling the parametrized function (stored in solution)
-  //         // at the interpolation points.
-  //         DenseVector<Number> EIM_rhs(RB_size);
-  //         for (unsigned int j=0; j<RB_size; j++)
-  //           {
-  //             EIM_rhs(j) =
-  //               RBEIMEvaluation::get_parametrized_function_value(comm(),
-  //                                                                local_pf,
-  //                                                                eim_eval.get_interpolation_points_elem_id(j),
-  //                                                                eim_eval.get_interpolation_points_comp(j),
-  //                                                                eim_eval.get_interpolation_points_qp(j));
-  //           }
-  //         eim_solutions[i] = eim_eval.rb_eim_solve(EIM_rhs);
-  //       }
-  //   }
+      unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
+      if (RB_size > 0)
+        {
+          // Get the right-hand side vector for the EIM approximation
+          // by sampling the parametrized function (stored in solution)
+          // at the interpolation points.
+          DenseVector<Number> EIM_rhs(RB_size);
+          for (unsigned int j=0; j<RB_size; j++)
+            {
+              EIM_rhs(j) =
+                SideRBEIMEvaluation::get_parametrized_function_value(comm(),
+                                                                     local_pf,
+                                                                     eim_eval.get_interpolation_points_elem_id(j),
+                                                                     eim_eval.get_interpolation_points_side_index(j),
+                                                                     eim_eval.get_interpolation_points_comp(j),
+                                                                     eim_eval.get_interpolation_points_qp(j));
+            }
+          eim_solutions[i] = eim_eval.rb_eim_solve(EIM_rhs);
+        }
+    }
 }
 
 const SideRBEIMEvaluation::SideQpDataMap & SideRBEIMConstruction::get_parametrized_function_from_training_set(unsigned int training_index) const
@@ -144,220 +145,195 @@ std::pair<Real,unsigned int> SideRBEIMConstruction::compute_max_eim_error()
 {
   LOG_SCOPE("compute_max_eim_error()", "SideRBEIMConstruction");
 
-  // if (get_n_params() == 0)
-  //   {
-  //     // Just return 0 if we have no parameters.
+  if (get_n_params() == 0)
+    {
+      // Just return 0 if we have no parameters.
       return std::make_pair(0.,0);
-  //   }
+    }
 
-  // // keep track of the maximum error
-  // unsigned int max_err_index = 0;
-  // Real max_err = 0.;
+  // keep track of the maximum error
+  unsigned int max_err_index = 0;
+  Real max_err = 0.;
 
-  // libmesh_error_msg_if(get_n_training_samples() != get_local_n_training_samples(),
-  //                      "Error: Training samples should be the same on all procs");
+  libmesh_error_msg_if(get_n_training_samples() != get_local_n_training_samples(),
+                       "Error: Training samples should be the same on all procs");
 
-  // const unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
+  const unsigned int RB_size = get_rb_eim_evaluation().get_n_basis_functions();
 
-  // if(best_fit_type_flag == PROJECTION_BEST_FIT)
-  //   {
-  //     for (auto training_index : make_range(get_n_training_samples()))
-  //       {
-  //         // Make a copy of the pre-computed solution for the specified training sample
-  //         // since we will modify it below to compute the best fit error.
-  //         SideQpDataMap solution_copy = _local_parametrized_functions_for_training[training_index];
+  if(best_fit_type_flag == PROJECTION_BEST_FIT)
+    {
+      for (auto training_index : make_range(get_n_training_samples()))
+        {
+          // Make a copy of the pre-computed solution for the specified training sample
+          // since we will modify it below to compute the best fit error.
+          SideQpDataMap solution_copy = _local_parametrized_functions_for_training[training_index];
 
-  //         // Perform an L2 projection in order to find the best approximation to
-  //         // the parametrized function from the current EIM space.
-  //         DenseVector<Number> best_fit_rhs(RB_size);
-  //         for (unsigned int i=0; i<RB_size; i++)
-  //           {
-  //             best_fit_rhs(i) = inner_product(solution_copy, get_rb_eim_evaluation().get_basis_function(i));
-  //           }
+          // Perform an L2 projection in order to find the best approximation to
+          // the parametrized function from the current EIM space.
+          DenseVector<Number> best_fit_rhs(RB_size);
+          for (unsigned int i=0; i<RB_size; i++)
+            {
+              best_fit_rhs(i) = inner_product(solution_copy, get_rb_eim_evaluation().get_basis_function(i));
+            }
 
-  //         // Now compute the best fit by an LU solve
-  //         DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
-  //         _eim_projection_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
+          // Now compute the best fit by an LU solve
+          DenseMatrix<Number> RB_inner_product_matrix_N(RB_size);
+          _eim_projection_matrix.get_principal_submatrix(RB_size, RB_inner_product_matrix_N);
 
-  //         DenseVector<Number> best_fit_coeffs;
-  //         RB_inner_product_matrix_N.lu_solve(best_fit_rhs, best_fit_coeffs);
+          DenseVector<Number> best_fit_coeffs;
+          RB_inner_product_matrix_N.lu_solve(best_fit_rhs, best_fit_coeffs);
 
-  //         get_rb_eim_evaluation().decrement_vector(solution_copy, best_fit_coeffs);
-  //         Real best_fit_error = get_max_abs_value(solution_copy);
+          get_rb_eim_evaluation().decrement_vector(solution_copy, best_fit_coeffs);
+          Real best_fit_error = get_max_abs_value(solution_copy);
 
-  //         if (best_fit_error > max_err)
-  //           {
-  //             max_err_index = training_index;
-  //             max_err = best_fit_error;
-  //           }
-  //       }
-  //   }
-  // else if(best_fit_type_flag == EIM_BEST_FIT)
-  //   {
-  //     // Perform EIM solve in order to find the approximation to solution
-  //     // (rb_eim_solve provides the EIM basis function coefficients used below)
+          if (best_fit_error > max_err)
+            {
+              max_err_index = training_index;
+              max_err = best_fit_error;
+            }
+        }
+    }
+  else if(best_fit_type_flag == EIM_BEST_FIT)
+    {
+      // Perform EIM solve in order to find the approximation to solution
+      // (rb_eim_solve provides the EIM basis function coefficients used below)
 
-  //     std::vector<RBParameters> training_parameters_copy(get_n_training_samples());
-  //     for (auto training_index : make_range(get_n_training_samples()))
-  //       {
-  //         training_parameters_copy[training_index] = get_params_from_training_set(training_index);
-  //       }
+      std::vector<RBParameters> training_parameters_copy(get_n_training_samples());
+      for (auto training_index : make_range(get_n_training_samples()))
+        {
+          training_parameters_copy[training_index] = get_params_from_training_set(training_index);
+        }
 
-  //     get_rb_eim_evaluation().rb_eim_solves(training_parameters_copy,
-  //                                           RB_size);
-  //     const std::vector<DenseVector<Number>> & rb_eim_solutions = get_rb_eim_evaluation().get_rb_eim_solutions();
+      get_rb_eim_evaluation().rb_eim_solves(training_parameters_copy,
+                                            RB_size);
+      const std::vector<DenseVector<Number>> & rb_eim_solutions = get_rb_eim_evaluation().get_rb_eim_solutions();
 
-  //     for (auto training_index : make_range(get_n_training_samples()))
-  //       {
-  //         const DenseVector<Number> & best_fit_coeffs = rb_eim_solutions[training_index];
+      for (auto training_index : make_range(get_n_training_samples()))
+        {
+          const DenseVector<Number> & best_fit_coeffs = rb_eim_solutions[training_index];
 
-  //         SideQpDataMap solution_copy = _local_parametrized_functions_for_training[training_index];
-  //         get_rb_eim_evaluation().decrement_vector(solution_copy, best_fit_coeffs);
-  //         Real best_fit_error = get_max_abs_value(solution_copy);
+          SideQpDataMap solution_copy = _local_parametrized_functions_for_training[training_index];
+          get_rb_eim_evaluation().decrement_vector(solution_copy, best_fit_coeffs);
+          Real best_fit_error = get_max_abs_value(solution_copy);
 
-  //         if (best_fit_error > max_err)
-  //           {
-  //             max_err_index = training_index;
-  //             max_err = best_fit_error;
-  //           }
-  //       }
-  //   }
-  // else
-  //   {
-  //     libmesh_error_msg("EIM best fit type not recognized");
-  //   }
+          if (best_fit_error > max_err)
+            {
+              max_err_index = training_index;
+              max_err = best_fit_error;
+            }
+        }
+    }
+  else
+    {
+      libmesh_error_msg("EIM best fit type not recognized");
+    }
 
-  // return std::make_pair(max_err,max_err_index);
+  return std::make_pair(max_err,max_err_index);
 }
 
 void SideRBEIMConstruction::initialize_parametrized_functions_in_training_set()
 {
   LOG_SCOPE("initialize_parametrized_functions_in_training_set()", "SideRBEIMConstruction");
 
-  // libmesh_error_msg_if(!serial_training_set,
-  //                      "Error: We must have serial_training_set==true in "
-  //                      "SideRBEIMConstruction::initialize_parametrized_functions_in_training_set");
+  libmesh_error_msg_if(!serial_training_set,
+                       "Error: We must have serial_training_set==true in "
+                       "SideRBEIMConstruction::initialize_parametrized_functions_in_training_set");
 
-  // libMesh::out << "Initializing parametrized functions in training set..." << std::endl;
+  libMesh::out << "Initializing parametrized functions in training set..." << std::endl;
 
-  // RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
+  SideRBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
 
-  // if (eim_eval.get_parametrized_function().is_lookup_table)
-  //   eim_eval.get_parametrized_function().initialize_lookup_table();
+  if (eim_eval.get_parametrized_function().is_lookup_table)
+    eim_eval.get_parametrized_function().initialize_lookup_table();
 
-  // // Store the locations of all quadrature points
-  // initialize_qp_data();
+  // Store the locations of all quadrature points
+  initialize_qp_data();
 
-  // // Keep track of the largest value in our parametrized functions
-  // // in the training set. We can use this value for normalization
-  // // purposes, for example.
-  // _max_abs_value_in_training_set = 0.;
+  // Keep track of the largest value in our parametrized functions
+  // in the training set. We can use this value for normalization
+  // purposes, for example.
+  _max_abs_value_in_training_set = 0.;
 
-  // unsigned int n_comps = eim_eval.get_parametrized_function().get_n_components();
+  unsigned int n_comps = eim_eval.get_parametrized_function().get_n_components();
 
-  // // Keep track of the maximum value per component. This will allow
-  // // us to scale the components to all have a similar magnitude,
-  // // which is helpful during the error assessment for the basis
-  // // enrichment to ensure that components with smaller magnitude
-  // // are not ignored.
-  // std::vector<Real> max_abs_value_per_component_in_training_set(n_comps);
+  // Keep track of the maximum value per component. This will allow
+  // us to scale the components to all have a similar magnitude,
+  // which is helpful during the error assessment for the basis
+  // enrichment to ensure that components with smaller magnitude
+  // are not ignored.
+  std::vector<Real> max_abs_value_per_component_in_training_set(n_comps);
 
-  // _local_parametrized_functions_for_training.resize( get_n_training_samples() );
-  // for (auto i : make_range(get_n_training_samples()))
-  //   {
-  //     libMesh::out << "Initializing parametrized function for training sample "
-  //       << (i+1) << " of " << get_n_training_samples() << std::endl;
+  _local_parametrized_functions_for_training.resize( get_n_training_samples() );
+  for (auto i : make_range(get_n_training_samples()))
+    {
+      libMesh::out << "Initializing parametrized function for training sample "
+        << (i+1) << " of " << get_n_training_samples() << std::endl;
 
-  //     set_params_from_training_set(i);
+      set_params_from_training_set(i);
 
-  //     eim_eval.get_parametrized_function().preevaluate_parametrized_function_on_mesh(get_parameters(),
-  //                                                                                    _local_quad_point_locations,
-  //                                                                                    _local_quad_point_subdomain_ids,
-  //                                                                                    _local_quad_point_locations_perturbations,
-  //                                                                                    *this);
+      eim_eval.get_parametrized_function().preevaluate_parametrized_function_on_mesh(get_parameters(),
+                                                                                     _local_quad_point_locations,
+                                                                                     _local_quad_point_boundary_ids,
+                                                                                     _local_quad_point_locations_perturbations,
+                                                                                     *this);
 
-  //     for (const auto & pr : _local_quad_point_locations)
-  //     {
-  //       dof_id_type elem_id = pr.first;
-  //       const auto & xyz_vector = pr.second;
+      for (const auto & pr : _local_quad_point_locations)
+      {
+        auto elem_side_pair = pr.first;
+        const auto & xyz_vector = pr.second;
 
-  //       std::vector<std::vector<Number>> comps_and_qps(n_comps);
-  //       for (unsigned int comp=0; comp<n_comps; comp++)
-  //         {
-  //           comps_and_qps[comp].resize(xyz_vector.size());
-  //           for (unsigned int qp : index_range(xyz_vector))
-  //             {
-  //               Number value =
-  //                 eim_eval.get_parametrized_function().lookup_preevaluated_value_on_mesh(comp, elem_id, qp);
-  //               comps_and_qps[comp][qp] = value;
+        std::vector<std::vector<Number>> comps_and_qps(n_comps);
+        for (unsigned int comp=0; comp<n_comps; comp++)
+          {
+            comps_and_qps[comp].resize(xyz_vector.size());
+            for (unsigned int qp : index_range(xyz_vector))
+              {
+                Number value =
+                  eim_eval.get_parametrized_function().lookup_preevaluated_value_on_mesh(comp,
+                                                                                         elem_side_pair.first,
+                                                                                         elem_side_pair.second,
+                                                                                         qp);
+                comps_and_qps[comp][qp] = value;
 
-  //               Real abs_value = std::abs(value);
-  //               if (abs_value > _max_abs_value_in_training_set)
-  //                 {
-  //                   _max_abs_value_in_training_set = abs_value;
-  //                   _max_abs_value_in_training_set_index = i;
-  //                 }
+                Real abs_value = std::abs(value);
+                if (abs_value > _max_abs_value_in_training_set)
+                  {
+                    _max_abs_value_in_training_set = abs_value;
+                    _max_abs_value_in_training_set_index = i;
+                  }
 
-  //               if (abs_value > max_abs_value_per_component_in_training_set[comp])
-  //                 max_abs_value_per_component_in_training_set[comp] = abs_value;
-  //             }
-  //         }
+                if (abs_value > max_abs_value_per_component_in_training_set[comp])
+                  max_abs_value_per_component_in_training_set[comp] = abs_value;
+              }
+          }
 
-  //       _local_parametrized_functions_for_training[i][elem_id] = comps_and_qps;
-  //     }
-  //   }
+        _local_parametrized_functions_for_training[i][elem_side_pair] = comps_and_qps;
+      }
+    }
 
-  // libMesh::out << "Parametrized functions in training set initialized" << std::endl;
+  libMesh::out << "Parametrized functions in training set initialized" << std::endl;
 
-  // unsigned int max_id = 0;
-  // comm().maxloc(_max_abs_value_in_training_set, max_id);
-  // comm().broadcast(_max_abs_value_in_training_set_index, max_id);
-  // libMesh::out << "Maximum absolute value in the training set: "
-  //   << _max_abs_value_in_training_set << std::endl << std::endl;
+  unsigned int max_id = 0;
+  comm().maxloc(_max_abs_value_in_training_set, max_id);
+  comm().broadcast(_max_abs_value_in_training_set_index, max_id);
+  libMesh::out << "Maximum absolute value in the training set: "
+    << _max_abs_value_in_training_set << std::endl << std::endl;
 
-  // // Calculate the maximum value for each component in the training set
-  // // across all components
-  // comm().max(max_abs_value_per_component_in_training_set);
+  // Calculate the maximum value for each component in the training set
+  // across all components
+  comm().max(max_abs_value_per_component_in_training_set);
 
-  // // We store the maximum value across all components divided by the maximum value for this component
-  // // so that when we scale using these factors all components should have a magnitude on the same
-  // // order as the maximum component.
-  // _component_scaling_in_training_set.resize(n_comps);
-  // for(unsigned int i : make_range(n_comps))
-  //   {
-  //     if (max_abs_value_per_component_in_training_set[i] == 0.)
-  //       _component_scaling_in_training_set[i] = 1.;
-  //     else
-  //       _component_scaling_in_training_set[i] = _max_abs_value_in_training_set / max_abs_value_per_component_in_training_set[i];
-  //   }
-
-  // _parametrized_functions_for_training_obs_values.resize( get_n_training_samples() );
-
-  // // Finally, we also evaluate the parametrized functions for training at the "observation points"
-  // if (eim_eval.get_n_observation_points() > 0)
-  //   {
-  //     std::vector<dof_id_type> observation_points_elem_ids;
-  //     std::vector<subdomain_id_type> observation_points_sbd_ids;
-  //     initialize_observation_points_data(observation_points_elem_ids, observation_points_sbd_ids);
-
-  //     for (auto i : make_range(get_n_training_samples()))
-  //       {
-  //         libMesh::out << "Initializing observation values for training sample "
-  //           << (i+1) << " of " << get_n_training_samples() << std::endl;
-
-  //         set_params_from_training_set(i);
-
-  //         _parametrized_functions_for_training_obs_values[i] =
-  //           eim_eval.get_parametrized_function().evaluate_at_observation_points(get_parameters(),
-  //                                                                               eim_eval.get_observation_points(),
-  //                                                                               observation_points_elem_ids,
-  //                                                                               observation_points_sbd_ids,
-  //                                                                               *this);
-
-  //         libmesh_error_msg_if(_parametrized_functions_for_training_obs_values[i].size() != eim_eval.get_n_observation_points(),
-  //                              "Number of observation values should match number of observation points");
-  //       }
-  //   }
+  // We store the maximum value across all components divided by the maximum value for this component
+  // so that when we scale using these factors all components should have a magnitude on the same
+  // order as the maximum component.
+  _component_scaling_in_training_set.resize(n_comps);
+  for(unsigned int i : make_range(n_comps))
+    {
+      if (max_abs_value_per_component_in_training_set[i] == 0.)
+        _component_scaling_in_training_set[i] = 1.;
+      else
+        _component_scaling_in_training_set[i] = _max_abs_value_in_training_set / max_abs_value_per_component_in_training_set[i];
+    }
 
 }
 
@@ -496,25 +472,25 @@ SideRBEIMConstruction::inner_product(const SideQpDataMap & v, const SideQpDataMa
 
   Number val = 0.;
 
-  // for (const auto & pr : v)
-  //   {
-  //     dof_id_type elem_id = pr.first;
-  //     const auto & v_comp_and_qp = pr.second;
+  for (const auto & pr : v)
+    {
+      auto elem_side_pair = pr.first;
+      const auto & v_comp_and_qp = pr.second;
 
-  //     const auto & w_comp_and_qp = libmesh_map_find(w, elem_id);
-  //     const auto & JxW = libmesh_map_find(_local_quad_point_JxW, elem_id);
+      const auto & w_comp_and_qp = libmesh_map_find(w, elem_side_pair);
+      const auto & JxW = libmesh_map_find(_local_quad_point_JxW, elem_side_pair);
 
-  //     for (const auto & comp : index_range(v_comp_and_qp))
-  //       {
-  //         const std::vector<Number> & v_qp = v_comp_and_qp[comp];
-  //         const std::vector<Number> & w_qp = w_comp_and_qp[comp];
+      for (const auto & comp : index_range(v_comp_and_qp))
+        {
+          const std::vector<Number> & v_qp = v_comp_and_qp[comp];
+          const std::vector<Number> & w_qp = w_comp_and_qp[comp];
 
-  //         for (unsigned int qp : index_range(JxW))
-  //           val += JxW[qp] * v_qp[qp] * libmesh_conj(w_qp[qp]);
-  //       }
-  //   }
+          for (unsigned int qp : index_range(JxW))
+            val += JxW[qp] * v_qp[qp] * libmesh_conj(w_qp[qp]);
+        }
+    }
 
-  // comm().sum(val);
+  comm().sum(val);
   return val;
 }
 
@@ -524,31 +500,31 @@ Real SideRBEIMConstruction::get_max_abs_value(const SideQpDataMap & v) const
 
   Real max_value = 0.;
 
-  // for (const auto & pr : v)
-  //   {
-  //     const auto & v_comp_and_qp = pr.second;
+  for (const auto & pr : v)
+    {
+      const auto & v_comp_and_qp = pr.second;
 
-  //     for (const auto & comp : index_range(v_comp_and_qp))
-  //       {
-  //         // If scale_components_in_enrichment() returns true then we
-  //         // apply a scaling to give an approximately uniform scaling
-  //         // for all components.
-  //         Real comp_scaling = 1.;
-  //         if (get_rb_eim_evaluation().scale_components_in_enrichment())
-  //           {
-  //             // Make sure that _component_scaling_in_training_set is initialized
-  //             libmesh_error_msg_if(comp >= _component_scaling_in_training_set.size(),
-  //                                  "Invalid vector index");
-  //             comp_scaling = _component_scaling_in_training_set[comp];
-  //           }
+      for (const auto & comp : index_range(v_comp_and_qp))
+        {
+          // If scale_components_in_enrichment() returns true then we
+          // apply a scaling to give an approximately uniform scaling
+          // for all components.
+          Real comp_scaling = 1.;
+          if (get_rb_eim_evaluation().scale_components_in_enrichment())
+            {
+              // Make sure that _component_scaling_in_training_set is initialized
+              libmesh_error_msg_if(comp >= _component_scaling_in_training_set.size(),
+                                   "Invalid vector index");
+              comp_scaling = _component_scaling_in_training_set[comp];
+            }
 
-  //         const std::vector<Number> & v_qp = v_comp_and_qp[comp];
-  //         for (Number value : v_qp)
-  //           max_value = std::max(max_value, std::abs(value * comp_scaling));
-  //       }
-  //   }
+          const std::vector<Number> & v_qp = v_comp_and_qp[comp];
+          for (Number value : v_qp)
+            max_value = std::max(max_value, std::abs(value * comp_scaling));
+        }
+    }
 
-  // comm().max(max_value);
+  comm().max(max_value);
   return max_value;
 }
 
@@ -734,42 +710,43 @@ void SideRBEIMConstruction::update_eim_matrices()
 {
   LOG_SCOPE("update_eim_matrices()", "SideRBEIMConstruction");
 
-  // RBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
-  // unsigned int RB_size = eim_eval.get_n_basis_functions();
+  SideRBEIMEvaluation & eim_eval = get_rb_eim_evaluation();
+  unsigned int RB_size = eim_eval.get_n_basis_functions();
 
-  // libmesh_assert_msg(RB_size >= 1, "Must have at least 1 basis function.");
+  libmesh_assert_msg(RB_size >= 1, "Must have at least 1 basis function.");
 
-  // // update the matrix that is used to evaluate L2 projections
-  // // into the EIM approximation space
-  // for (unsigned int i=(RB_size-1); i<RB_size; i++)
-  //   {
-  //     for (unsigned int j=0; j<RB_size; j++)
-  //       {
-  //         Number value = inner_product(eim_eval.get_basis_function(j),
-  //                                      eim_eval.get_basis_function(i));
+  // update the matrix that is used to evaluate L2 projections
+  // into the EIM approximation space
+  for (unsigned int i=(RB_size-1); i<RB_size; i++)
+    {
+      for (unsigned int j=0; j<RB_size; j++)
+        {
+          Number value = inner_product(eim_eval.get_basis_function(j),
+                                       eim_eval.get_basis_function(i));
 
-  //         _eim_projection_matrix(i,j) = value;
-  //         if (i!=j)
-  //           {
-  //             // The inner product matrix is assumed to be hermitian
-  //             _eim_projection_matrix(j,i) = libmesh_conj(value);
-  //           }
-  //       }
-  //   }
+          _eim_projection_matrix(i,j) = value;
+          if (i!=j)
+            {
+              // The inner product matrix is assumed to be hermitian
+              _eim_projection_matrix(j,i) = libmesh_conj(value);
+            }
+        }
+    }
 
-  // // update the EIM interpolation matrix
-  // for (unsigned int j=0; j<RB_size; j++)
-  //   {
-  //     // Evaluate the basis functions at the new interpolation point in order
-  //     // to update the interpolation matrix
-  //     Number value =
-  //       eim_eval.get_eim_basis_function_value(j,
-  //                                             eim_eval.get_interpolation_points_elem_id(RB_size-1),
-  //                                             eim_eval.get_interpolation_points_comp(RB_size-1),
-  //                                             eim_eval.get_interpolation_points_qp(RB_size-1));
-  //     eim_eval.set_interpolation_matrix_entry(RB_size-1, j, value);
+  // update the EIM interpolation matrix
+  for (unsigned int j=0; j<RB_size; j++)
+    {
+      // Evaluate the basis functions at the new interpolation point in order
+      // to update the interpolation matrix
+      Number value =
+        eim_eval.get_eim_basis_function_value(j,
+                                              eim_eval.get_interpolation_points_elem_id(RB_size-1),
+                                              eim_eval.get_interpolation_points_side_index(RB_size-1),
+                                              eim_eval.get_interpolation_points_comp(RB_size-1),
+                                              eim_eval.get_interpolation_points_qp(RB_size-1));
+      eim_eval.set_interpolation_matrix_entry(RB_size-1, j, value);
 
-  //   }
+    }
 }
 
 void SideRBEIMConstruction::scale_parametrized_function(
@@ -778,20 +755,20 @@ void SideRBEIMConstruction::scale_parametrized_function(
 {
   LOG_SCOPE("scale_parametrized_function()", "SideRBEIMConstruction");
 
-  // for (auto & pr : local_pf)
-  //   {
-  //     auto & comp_and_qp = pr.second;
+  for (auto & pr : local_pf)
+    {
+      auto & comp_and_qp = pr.second;
 
-  //     for (unsigned int comp : index_range(comp_and_qp))
-  //       {
-  //         std::vector<Number> & qp_values = comp_and_qp[comp];
+      for (unsigned int comp : index_range(comp_and_qp))
+        {
+          std::vector<Number> & qp_values = comp_and_qp[comp];
 
-  //         for (unsigned int qp : index_range(qp_values))
-  //           {
-  //             qp_values[qp] *= scaling_factor;
-  //           }
-  //       }
-  //   }
+          for (unsigned int qp : index_range(qp_values))
+            {
+              qp_values[qp] *= scaling_factor;
+            }
+        }
+    }
 }
 
 } // namespace libMesh

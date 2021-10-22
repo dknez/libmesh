@@ -58,8 +58,10 @@ void RBEIMEvaluationBase::clear()
   _interpolation_points_xyz.clear();
   _interpolation_points_comp.clear();
   _interpolation_points_subdomain_id.clear();
+  _interpolation_points_boundary_id.clear();
   _interpolation_points_xyz_perturbations.clear();
   _interpolation_points_elem_id.clear();
+  _interpolation_points_side_index.clear();
   _interpolation_points_qp.clear();
   _interpolation_points_phi_i_qp.clear();
 
@@ -75,8 +77,10 @@ void RBEIMEvaluationBase::resize_data_structures(const unsigned int Nmax)
   _interpolation_points_xyz.clear();
   _interpolation_points_comp.clear();
   _interpolation_points_subdomain_id.clear();
+  _interpolation_points_boundary_id.clear();
   _interpolation_points_xyz_perturbations.clear();
   _interpolation_points_elem_id.clear();
+  _interpolation_points_side_index.clear();
   _interpolation_points_qp.clear();
   _interpolation_points_phi_i_qp.clear();
 
@@ -251,6 +255,11 @@ void RBEIMEvaluationBase::add_interpolation_points_subdomain_id(subdomain_id_typ
   _interpolation_points_subdomain_id.emplace_back(sbd_id);
 }
 
+void RBEIMEvaluationBase::add_interpolation_points_boundary_id(boundary_id_type b_id)
+{
+  _interpolation_points_boundary_id.emplace_back(b_id);
+}
+
 void RBEIMEvaluationBase::add_interpolation_points_xyz_perturbations(const std::vector<Point> & perturbs)
 {
   _interpolation_points_xyz_perturbations.emplace_back(perturbs);
@@ -259,6 +268,11 @@ void RBEIMEvaluationBase::add_interpolation_points_xyz_perturbations(const std::
 void RBEIMEvaluationBase::add_interpolation_points_elem_id(dof_id_type elem_id)
 {
   _interpolation_points_elem_id.emplace_back(elem_id);
+}
+
+void RBEIMEvaluationBase::add_interpolation_points_side_index(unsigned int side_index)
+{
+  _interpolation_points_side_index.emplace_back(side_index);
 }
 
 void RBEIMEvaluationBase::add_interpolation_points_qp(unsigned int qp)
@@ -292,6 +306,13 @@ subdomain_id_type RBEIMEvaluationBase::get_interpolation_points_subdomain_id(uns
   return _interpolation_points_subdomain_id[index];
 }
 
+boundary_id_type RBEIMEvaluationBase::get_interpolation_points_boundary_id(unsigned int index) const
+{
+  libmesh_error_msg_if(index >= _interpolation_points_boundary_id.size(), "Error: Invalid index");
+
+  return _interpolation_points_boundary_id[index];
+}
+
 const std::vector<Point> & RBEIMEvaluationBase::get_interpolation_points_xyz_perturbations(unsigned int index) const
 {
   libmesh_error_msg_if(index >= _interpolation_points_xyz_perturbations.size(), "Error: Invalid index");
@@ -304,6 +325,13 @@ dof_id_type RBEIMEvaluationBase::get_interpolation_points_elem_id(unsigned int i
   libmesh_error_msg_if(index >= _interpolation_points_elem_id.size(), "Error: Invalid index");
 
   return _interpolation_points_elem_id[index];
+}
+
+unsigned int RBEIMEvaluationBase::get_interpolation_points_side_index(unsigned int index) const
+{
+  libmesh_error_msg_if(index >= _interpolation_points_side_index.size(), "Error: Invalid index");
+
+  return _interpolation_points_side_index[index];
 }
 
 unsigned int RBEIMEvaluationBase::get_interpolation_points_qp(unsigned int index) const
