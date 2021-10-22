@@ -22,13 +22,12 @@
 
 // rbOOmit includes
 #include "libmesh/rb_eim_construction_base.h"
+#include "libmesh/side_rb_eim_assembly.h"
+#include "libmesh/side_rb_eim_evaluation.h"
 #include "libmesh/rb_assembly_expansion.h"
-#include "libmesh/rb_eim_assembly.h"
-#include "libmesh/rb_eim_evaluation.h"
 
 // libMesh includes
 #include "libmesh/mesh_function.h"
-#include "libmesh/coupling_matrix.h"
 
 // C++ includes
 #include <unordered_map>
@@ -209,7 +208,7 @@ private:
    * about each point in _local_quad_point_locations to enable finite difference approximation
    * to the mapping function derivatives.
    */
-  std::unordered_map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > _local_quad_point_locations_perturbations;
+  std::map<std::pair<dof_id_type,unsigned int>, std::vector<std::vector<Point>> > _local_quad_point_locations_perturbations;
 
 };
 

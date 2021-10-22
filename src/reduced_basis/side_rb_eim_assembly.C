@@ -52,7 +52,7 @@ void SideRBEIMAssembly::evaluate_basis_function(dof_id_type elem_id,
   libmesh_error_msg_if(values.empty(), "Error: EIM basis function has no entries on this element for this processor");
 }
 
-RBEIMConstruction & SideRBEIMAssembly::get_rb_eim_construction()
+SideRBEIMConstruction & SideRBEIMAssembly::get_rb_eim_construction()
 {
   return _rb_eim_con;
 }

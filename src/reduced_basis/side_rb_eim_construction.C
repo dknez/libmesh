@@ -58,7 +58,7 @@ SideRBEIMConstruction::SideRBEIMConstruction (EquationSystems & es,
                                               const std::string & name_in,
                                               const unsigned int number_in)
   :
-  SideRBEIMConstructionBase(es, name_in, number_in),
+  RBEIMConstructionBase(es, name_in, number_in),
   _rb_eim_eval(nullptr)
 {
 }
@@ -67,7 +67,7 @@ SideRBEIMConstruction::~SideRBEIMConstruction () = default;
 
 void SideRBEIMConstruction::clear()
 {
-  SideRBEIMConstructionBase::clear();
+  RBEIMConstructionBase::clear();
 
   _local_parametrized_functions_for_training.clear();
   _local_quad_point_locations.clear();
@@ -75,18 +75,18 @@ void SideRBEIMConstruction::clear()
   _local_quad_point_boundary_ids.clear();
 }
 
-void SideRBEIMConstruction::set_rb_eim_evaluation(RBEIMEvaluation & rb_eim_eval_in)
+void SideRBEIMConstruction::set_rb_eim_evaluation(SideRBEIMEvaluation & rb_eim_eval_in)
 {
   _rb_eim_eval = &rb_eim_eval_in;
 }
 
-RBEIMEvaluation & SideRBEIMConstruction::get_rb_eim_evaluation()
+SideRBEIMEvaluation & SideRBEIMConstruction::get_rb_eim_evaluation()
 {
   libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluation object hasn't been initialized yet");
   return *_rb_eim_eval;
 }
 
-const RBEIMEvaluation & SideRBEIMConstruction::get_rb_eim_evaluation() const
+const SideRBEIMEvaluation & SideRBEIMConstruction::get_rb_eim_evaluation() const
 {
   libmesh_error_msg_if(!_rb_eim_eval, "Error: RBEIMEvaluation object hasn't been initialized yet");
   return *_rb_eim_eval;
@@ -96,7 +96,7 @@ void SideRBEIMConstruction::print_info()
 {
   libMesh::out << std::endl << "SideRBEIMConstruction parameters:" << std::endl;
 
-  SideRBEIMConstructionBase::print_info();
+  RBEIMConstructionBase::print_info();
 }
 
 void SideRBEIMConstruction::store_eim_solutions_for_training_set()
@@ -133,7 +133,7 @@ void SideRBEIMConstruction::store_eim_solutions_for_training_set()
   //   }
 }
 
-const RBEIMEvaluation::SideQpDataMap & SideRBEIMConstruction::get_parametrized_function_from_training_set(unsigned int training_index) const
+const SideRBEIMEvaluation::SideQpDataMap & SideRBEIMConstruction::get_parametrized_function_from_training_set(unsigned int training_index) const
 {
   libmesh_error_msg_if(training_index >= _local_parametrized_functions_for_training.size(),
                        "Invalid index: " << training_index);
