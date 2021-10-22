@@ -27,6 +27,7 @@
 // C++ includes
 #include <vector>
 #include <map>
+#include <set>
 
 namespace libMesh
 {
@@ -130,6 +131,12 @@ public:
                                                    unsigned int qp) const;
 
   /**
+   * Get/set the boundary IDs that this parametrized function is defined on.
+   */
+  const std::set<boundary_id_type> & get_parametrized_function_boundary_ids() const;
+  void set_parametrized_function_boundary_ids(const std::set<boundary_id_type> & boundary_ids);
+
+  /**
    * Storage for pre-evaluated values. The indexing is given by:
    *   parameter index --> point index --> component index --> value.
    */
@@ -147,6 +154,14 @@ public:
    * does not provide a default implementation of std::hash for pairs.
    */
   std::map<std::pair<dof_id_type,unsigned int>, std::vector<unsigned int>> mesh_to_preevaluated_values_map;
+
+private:
+
+  /**
+   * The boundary IDs that this parametrized function is defined on, since in the case
+   * of a SideParametrizedFunction it is defined only on specified "sides" of the mesh.
+   */
+  std::set<boundary_id_type> _parametrized_function_boundary_ids;
 
 };
 

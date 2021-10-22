@@ -227,4 +227,14 @@ Number SideRBParametrizedFunction::lookup_preevaluated_value_on_mesh(unsigned in
   return preevaluated_values[0][index][comp];
 }
 
+const std::set<boundary_id_type> & SideRBParametrizedFunction::get_parametrized_function_boundary_ids() const
+{
+  return _parametrized_function_boundary_ids;
+}
+
+void SideRBParametrizedFunction::set_parametrized_function_boundary_ids(const std::set<boundary_id_type> & boundary_ids)
+{
+  _parametrized_function_boundary_ids = boundary_ids;
+}
+
 }
