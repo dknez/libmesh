@@ -46,8 +46,7 @@ namespace libMesh
 RBEIMEvaluationBase::RBEIMEvaluationBase(const Parallel::Communicator & comm)
 :
 ParallelObject(comm),
-_rb_eim_solves_N(0),
-_preserve_rb_eim_solutions(false)
+_rb_eim_solves_N(0)
 {
 }
 
@@ -109,16 +108,6 @@ DenseVector<Number> RBEIMEvaluationBase::rb_eim_solve(DenseVector<Number> & EIM_
 void RBEIMEvaluationBase::rb_eim_solves(const std::vector<RBParameters> & mus,
                                         unsigned int N)
 {
-  if (_preserve_rb_eim_solutions)
-    {
-      // In this case we preserve _rb_eim_solutions and hence we
-      // just return immediately so that we skip updating
-      // _rb_eim_solutions below. This is relevant in cases where
-      // we set up _rb_eim_solutions elsewhere and we don't want
-      // to override it.
-      return;
-    }
-
   libmesh_error_msg_if(N > get_n_basis_functions(),
     "Error: N cannot be larger than the number of basis functions in rb_eim_solves");
   libmesh_error_msg_if(N==0, "Error: N must be greater than 0 in rb_eim_solves");
@@ -359,54 +348,6 @@ void RBEIMEvaluationBase::set_interpolation_matrix_entry(unsigned int i, unsigne
 const DenseMatrix<Number> & RBEIMEvaluationBase::get_interpolation_matrix() const
 {
   return _interpolation_matrix;
-}
-
-void RBEIMEvaluationBase::set_observation_points(const std::vector<Point> & observation_points_xyz)
-{
-  _observation_points_xyz = observation_points_xyz;
-}
-
-unsigned int RBEIMEvaluationBase::get_n_observation_points() const
-{
-  return _observation_points_xyz.size();
-}
-
-const std::vector<Point> & RBEIMEvaluationBase::get_observation_points() const
-{
-  return _observation_points_xyz;
-}
-
-const std::vector<Number> & RBEIMEvaluationBase::get_observation_values(unsigned int bf_index, unsigned int obs_pt_index) const
-{
-  libmesh_error_msg_if(bf_index >= _observation_points_values.size(), "Invalid basis function index: " << bf_index);
-  libmesh_error_msg_if(obs_pt_index >= _observation_points_values[bf_index].size(), "Invalid observation point index: " << obs_pt_index);
-
-  return _observation_points_values[bf_index][obs_pt_index];
-}
-
-const std::vector<std::vector<std::vector<Number>>> & RBEIMEvaluationBase::get_observation_values() const
-{
-  return _observation_points_values;
-}
-
-void RBEIMEvaluationBase::set_preserve_rb_eim_solutions(bool preserve_rb_eim_solutions)
-{
-  _preserve_rb_eim_solutions = preserve_rb_eim_solutions;
-}
-
-bool RBEIMEvaluationBase::get_preserve_rb_eim_solutions() const
-{
-  return _preserve_rb_eim_solutions;
-}
-
-void RBEIMEvaluationBase::add_observation_values_for_basis_function(const std::vector<std::vector<Number>> & values)
-{
-  _observation_points_values.emplace_back(values);
-}
-
-void RBEIMEvaluationBase::set_observation_values(const std::vector<std::vector<std::vector<Number>>> & values)
-{
-  _observation_points_values = values;
 }
 
 std::set<unsigned int> RBEIMEvaluationBase::get_eim_vars_to_project_and_write() const

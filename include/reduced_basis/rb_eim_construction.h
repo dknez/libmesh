@@ -149,15 +149,6 @@ private:
   void initialize_qp_data();
 
   /**
-   * Initialize the \p elem_ids and \p sbd_ids associated with the observation
-   * points so that we can subsequently evaluate parametrized functions at the
-   * observations points.
-   */
-  void initialize_observation_points_data(
-    std::vector<dof_id_type> & observation_points_elem_ids,
-    std::vector<subdomain_id_type> & observation_points_sbd_ids);
-
-  /**
    * Evaluate the inner product of vec1 and vec2 which specify values at
    * quadrature points. The inner product includes the JxW contributions
    * stored in _local_quad_point_JxW, so that this is equivalent to

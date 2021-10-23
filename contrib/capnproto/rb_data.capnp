@@ -110,14 +110,15 @@ struct RBEIMEvaluationReal @0xf8121d2237427a80 {
   interpolationXyz           @3  :List(Point3D);
   interpolationComp          @4  :List(Integer);
   interpolationSubdomainId   @5  :List(Integer);
-  interpolationElemId        @6  :List(Integer);
-  interpolationQp            @7  :List(Integer);
-  interpolationXyzPerturb    @8  :List(List(Point3D));
-  interpolationMatrix        @9  :List(Real);
-  eimSolutionsForTrainingSet @10 :List(List(Real));
-  observationPointsXyz       @11 :List(Point3D);
-  observationPointsValues    @12 :List(List(List(Real)));
+  interpolationBoundaryId    @6  :List(Integer);
+  interpolationElemId        @7  :List(Integer);
+  interpolationSideIndex     @8  :List(Integer);
+  interpolationNodeId        @9  :List(Integer);
+  interpolationQp            @10 :List(Integer);
+  interpolationXyzPerturb    @11 :List(List(Point3D));
+  interpolationMatrix        @12 :List(Real);
   interpolationPhiValues     @13 :List(List(Real));
+  eimSolutionsForTrainingSet @14 :List(List(Real));
 }
 struct RBEIMEvaluationComplex @0xc35a5eb004965455 {
   nBfs                       @0  :Integer;
@@ -126,12 +127,13 @@ struct RBEIMEvaluationComplex @0xc35a5eb004965455 {
   interpolationXyz           @3  :List(Point3D);
   interpolationComp          @4  :List(Integer);
   interpolationSubdomainId   @5  :List(Integer);
-  interpolationElemId        @6  :List(Integer);
-  interpolationQp            @7  :List(Integer);
-  interpolationXyzPerturb    @8  :List(List(Point3D));
-  interpolationMatrix        @9  :List(Complex);
-  eimSolutionsForTrainingSet @10 :List(List(Complex));
-  observationPointsXyz       @11 :List(Point3D);
-  observationPointsValues    @12 :List(List(List(Complex)));
+  interpolationBoundaryId    @6  :List(Integer);
+  interpolationElemId        @7  :List(Integer);
+  interpolationSideIndex     @8  :List(Integer);
+  interpolationNodeId        @9  :List(Integer);
+  interpolationQp            @10 :List(Integer);
+  interpolationXyzPerturb    @11 :List(List(Point3D));
+  interpolationMatrix        @12 :List(Complex);
   interpolationPhiValues     @13 :List(List(Real));
+  eimSolutionsForTrainingSet @14 :List(List(Complex));
 }
