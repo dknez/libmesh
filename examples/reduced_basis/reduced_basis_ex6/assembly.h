@@ -37,7 +37,7 @@ using libMesh::RBThetaExpansion;
 using libMesh::RBEIMAssembly;
 using libMesh::RBEIMConstruction;
 using libMesh::RBEIMEvaluation;
-using libMesh::RBEIMTheta;
+using libMesh::RBEIMThetaBase;
 using libMesh::Real;
 using libMesh::RealGradient;
 using libMesh::Elem;
@@ -211,15 +211,15 @@ struct AssemblyA2 : ElemAssembly
   }
 };
 
-struct ThetaEIM : RBEIMTheta
+struct ThetaEIM : RBEIMThetaBase
 {
   ThetaEIM(RBEIMEvaluation & rb_eim_eval_in, unsigned int index_in) :
-    RBEIMTheta(rb_eim_eval_in, index_in)
+    RBEIMThetaBase(rb_eim_eval_in, index_in)
   {}
 
   virtual Number evaluate(const RBParameters & mu)
   {
-    return mu.get_value("kappa") * RBEIMTheta::evaluate(mu);
+    return mu.get_value("kappa") * RBEIMThetaBase::evaluate(mu);
   }
 };
 
