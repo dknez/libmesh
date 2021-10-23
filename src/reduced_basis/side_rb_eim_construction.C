@@ -372,7 +372,7 @@ void SideRBEIMConstruction::initialize_qp_data()
 
   _local_quad_point_locations_perturbations.clear();
 
-  // BounadryInfo and related data structures
+  // BoundaryInfo and related data structures
   const auto & binfo = mesh.get_boundary_info();
   std::vector<boundary_id_type> side_boundary_ids;
 

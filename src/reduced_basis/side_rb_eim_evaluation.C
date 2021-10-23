@@ -32,6 +32,7 @@
 #include "libmesh/system.h"
 #include "libmesh/numeric_vector.h"
 #include "libmesh/quadrature.h"
+#include "libmesh/boundary_info.h"
 #include "timpi/parallel_implementation.h"
 
 // C++ includes
@@ -610,227 +611,256 @@ void SideRBEIMEvaluation::gather_bfs()
 
 
 
-void SideRBEIMEvaluation::distribute_bfs(const System & /*sys*/)
+void SideRBEIMEvaluation::distribute_bfs(const System & sys)
 {
-  // // So we can avoid calling these many times below
-  // auto n_procs = sys.comm().size();
-  // auto rank = sys.comm().rank();
+  // So we can avoid calling these many times below
+  auto n_procs = sys.comm().size();
+  auto rank = sys.comm().rank();
 
-  // // In serial there's nothing to distribute
-  // if (n_procs == 1)
-  //   return;
+  // In serial there's nothing to distribute
+  if (n_procs == 1)
+    return;
 
-  // // Broadcast the number of basis functions from proc 0. After
-  // // distributing, all procs should have the same number of basis
-  // // functions.
-  // auto n_bf = _local_eim_basis_functions.size();
-  // sys.comm().broadcast(n_bf);
+  // Broadcast the number of basis functions from proc 0. After
+  // distributing, all procs should have the same number of basis
+  // functions.
+  auto n_bf = _local_eim_basis_functions.size();
+  sys.comm().broadcast(n_bf);
 
-  // // Allocate enough space to store n_bf basis functions on non-zero ranks
-  // if (rank != 0)
-  //   _local_eim_basis_functions.resize(n_bf);
+  // Allocate enough space to store n_bf basis functions on non-zero ranks
+  if (rank != 0)
+    _local_eim_basis_functions.resize(n_bf);
 
-  // // Broadcast the number of variables from proc 0. After
-  // // distributing, all procs should have the same number of variables.
-  // auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
-  // sys.comm().broadcast(n_vars);
+  // Broadcast the number of variables from proc 0. After
+  // distributing, all procs should have the same number of variables.
+  auto n_vars = _local_eim_basis_functions[0].begin()->second.size();
+  sys.comm().broadcast(n_vars);
 
-  // // Construct lists of elem ids owned by different processors
-  // const MeshBase & mesh = sys.get_mesh();
+  const std::set<boundary_id_type> & parametrized_function_boundary_ids =
+    get_parametrized_function().get_parametrized_function_boundary_ids();
 
-  // std::vector<dof_id_type> gathered_local_elem_ids;
-  // gathered_local_elem_ids.reserve(mesh.n_elem());
-  // for (const auto & elem : mesh.active_local_element_ptr_range())
-  //   gathered_local_elem_ids.push_back(elem->id());
+  // Construct lists of elem ids owned by different processors
+  const MeshBase & mesh = sys.get_mesh();
 
-  // // I _think_ the local elem ids are likely to already be sorted in
-  // // ascending order, since that is how they are stored on the Mesh,
-  // // but we can always just guarantee this to be on the safe side as
-  // // well.
-  // std::sort(gathered_local_elem_ids.begin(), gathered_local_elem_ids.end());
+  // BoundaryInfo and related data structures
+  const auto & binfo = mesh.get_boundary_info();
+  std::vector<boundary_id_type> side_boundary_ids;
 
-  // // Gather the number of local elems from all procs to proc 0
-  // auto n_local_elems = gathered_local_elem_ids.size();
-  // std::vector<std::size_t> gathered_n_local_elems = {n_local_elems};
-  // sys.comm().gather(/*root_id=*/0, gathered_n_local_elems);
+  std::vector<dof_id_type> gathered_local_elem_ids;
+  std::vector<dof_id_type> gathered_local_side_indices;
+  for (const auto & elem : mesh.active_local_element_ptr_range())
+    {
+      for (unsigned int side = 0; side != elem->n_sides(); ++side)
+        {
+          // skip non-boundary elements
+          if(!elem->neighbor_ptr(side))
+            {
+              binfo.boundary_ids(elem, side, side_boundary_ids);
 
-  // // Gather the elem ids owned by each processor onto processor 0.
-  // sys.comm().gather(/*root_id=*/0, gathered_local_elem_ids);
+              bool has_side_boundary_id = false;
+              for(boundary_id_type side_boundary_id : side_boundary_ids)
+                if(parametrized_function_boundary_ids.count(side_boundary_id))
+                  {
+                    has_side_boundary_id = true;
+                    break;
+                  }
 
-  // // Construct vectors of "start" and "one-past-the-end" indices into
-  // // the gathered_local_elem_ids vector for each proc. Only valid on
-  // // processor 0.
-  // std::vector<std::size_t> start_elem_ids_index, end_elem_ids_index;
+              if(has_side_boundary_id)
+                {
+                  gathered_local_elem_ids.push_back(elem->id());
+                  gathered_local_side_indices.push_back(side);
+                }
+            }
+        }
+    }
 
-  // if (rank == 0)
-  //   {
-  //     start_elem_ids_index.resize(n_procs);
-  //     start_elem_ids_index[0] = 0;
-  //     for (processor_id_type p=1; p<n_procs; ++p)
-  //       start_elem_ids_index[p] = start_elem_ids_index[p-1] + gathered_n_local_elems[p-1];
+  // Gather the number of local elems from all procs to proc 0
+  auto n_local_elems = gathered_local_elem_ids.size();
+  std::vector<std::size_t> gathered_n_local_elems = {n_local_elems};
+  sys.comm().gather(/*root_id=*/0, gathered_n_local_elems);
 
-  //     end_elem_ids_index.resize(n_procs);
-  //     end_elem_ids_index[n_procs - 1] = gathered_local_elem_ids.size();
-  //     for (processor_id_type p=0; p<n_procs - 1; ++p)
-  //       end_elem_ids_index[p] = start_elem_ids_index[p+1];
-  //   }
+  // Gather the (elem,side) owned by each processor onto processor 0.
+  sys.comm().gather(/*root_id=*/0, gathered_local_elem_ids);
+  sys.comm().gather(/*root_id=*/0, gathered_local_side_indices);
 
-  // // On processor 0, using basis function 0 and variable 0, prepare a
-  // // vector with the number of qps per Elem.  Then scatter this vector
-  // // out to the processors that require it. The order of this vector
-  // // matches the gathered_local_elem_ids ordering. The counts will be
-  // // gathered_n_local_elems, since there will be one qp count per Elem.
-  // std::vector<unsigned int> n_qp_per_elem_data;
+  // Construct vectors of "start" and "one-past-the-end" indices into
+  // the gathered_local_elem_ids vector for each proc. Only valid on
+  // processor 0.
+  std::vector<std::size_t> start_elem_ids_index, end_elem_ids_index;
 
-  // // On rank 0, the "counts" vector holds the number of floating point values that
-  // // are to be scattered to each proc. It is only required on proc 0.
-  // std::vector<int> counts;
+  if (rank == 0)
+    {
+      start_elem_ids_index.resize(n_procs);
+      start_elem_ids_index[0] = 0;
+      for (processor_id_type p=1; p<n_procs; ++p)
+        start_elem_ids_index[p] = start_elem_ids_index[p-1] + gathered_n_local_elems[p-1];
 
-  // if (rank == 0)
-  //   {
-  //     n_qp_per_elem_data.reserve(gathered_local_elem_ids.size());
-  //     counts.resize(n_procs);
+      end_elem_ids_index.resize(n_procs);
+      end_elem_ids_index[n_procs - 1] = gathered_local_elem_ids.size();
+      for (processor_id_type p=0; p<n_procs - 1; ++p)
+        end_elem_ids_index[p] = start_elem_ids_index[p+1];
+    }
 
-  //     auto & bf_map = _local_eim_basis_functions[0];
+  // On processor 0, using basis function 0 and variable 0, prepare a
+  // vector with the number of qps per Elem.  Then scatter this vector
+  // out to the processors that require it. The order of this vector
+  // matches the gathered_local_elem_ids ordering. The counts will be
+  // gathered_n_local_elems, since there will be one qp count per Elem.
+  std::vector<unsigned int> n_qp_per_elem_data;
 
-  //     for (processor_id_type p=0; p<n_procs; ++p)
-  //       {
-  //         for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
-  //           {
-  //             auto elem_id = gathered_local_elem_ids[e];
+  // On rank 0, the "counts" vector holds the number of floating point values that
+  // are to be scattered to each proc. It is only required on proc 0.
+  std::vector<int> counts;
 
-  //             // Get reference to array[n_vars][n_qp] for current Elem.
-  //             // Throws an error if the required elem_id is not found.
-  //             const auto & array = libmesh_map_find(bf_map, elem_id);
+  if (rank == 0)
+    {
+      n_qp_per_elem_data.reserve(gathered_local_elem_ids.size());
+      counts.resize(n_procs);
 
-  //             auto n_qps = array[0].size();
+      auto & bf_map = _local_eim_basis_functions[0];
 
-  //             // We use var==0 to set the number of qps for all vars
-  //             n_qp_per_elem_data.push_back(n_qps);
+      for (processor_id_type p=0; p<n_procs; ++p)
+        {
+          for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
+            {
+              auto elem_id = gathered_local_elem_ids[e];
+              auto side_index = gathered_local_side_indices[e];
 
-  //             // Accumulate the count for this proc
-  //             counts[p] += n_qps;
-  //           } // end for (e)
-  //       } // end for proc_id
-  //   } // if (rank == 0)
+              // Get reference to array[n_vars][n_qp] for current Elem.
+              // Throws an error if the required elem_id is not found.
+              const auto & array = libmesh_map_find(bf_map, std::make_pair(elem_id, side_index));
 
-  // // Now scatter the n_qp_per_elem_data to all procs (must call the
-  // // scatter on all procs, it is a collective).
-  // {
-  //   std::vector<unsigned int> recv;
-  //   std::vector<int> tmp(gathered_n_local_elems.begin(), gathered_n_local_elems.end());
-  //   sys.comm().scatter(n_qp_per_elem_data, tmp, recv, /*root_id=*/0);
+              auto n_qps = array[0].size();
 
-  //   // Now swap n_qp_per_elem_data and recv. All processors now have a
-  //   // vector of length n_local_elems containing the number of
-  //   // quadarature points per Elem.
-  //   n_qp_per_elem_data.swap(recv);
-  // }
+              // We use var==0 to set the number of qps for all vars
+              n_qp_per_elem_data.push_back(n_qps);
 
-  // // For each basis function and each variable, build a vector
-  // // of qp data in the Elem ordering given by the
-  // // gathered_local_elem_ids, then call
-  // //
-  // // sys.comm().scatter(data, counts, recv, /*root_id=*/0);
-  // std::vector<std::vector<Number>> qp_data(n_vars);
-  // if (rank == 0)
-  //   {
-  //     // The total amount of qp data is given by summing the entries
-  //     // of the "counts" vector.
-  //     auto n_qp_data =
-  //       std::accumulate(counts.begin(), counts.end(), 0u);
+              // Accumulate the count for this proc
+              counts[p] += n_qps;
+            } // end for (e)
+        } // end for proc_id
+    } // if (rank == 0)
 
-  //     // On processor 0, reserve enough space to hold all the qp
-  //     // data for a single basis function for each var.
-  //     for (auto var : index_range(qp_data))
-  //       qp_data[var].reserve(n_qp_data);
-  //   }
+  // Now scatter the n_qp_per_elem_data to all procs (must call the
+  // scatter on all procs, it is a collective).
+  {
+    std::vector<unsigned int> recv;
+    std::vector<int> tmp(gathered_n_local_elems.begin(), gathered_n_local_elems.end());
+    sys.comm().scatter(n_qp_per_elem_data, tmp, recv, /*root_id=*/0);
 
-  // // The recv_qp_data vector will be used on the receiving end of all
-  // // the scatters below.
-  // std::vector<Number> recv_qp_data;
+    // Now swap n_qp_per_elem_data and recv. All processors now have a
+    // vector of length n_local_elems containing the number of
+    // quadarature points per Elem.
+    n_qp_per_elem_data.swap(recv);
+  }
 
-  // // Loop from 0..n_bf on _all_ procs, since the scatters inside this
-  // // loop are collective.
-  // for (auto bf : make_range(n_bf))
-  //   {
-  //     // Prepare data for scattering (only on proc 0)
-  //     if (rank == 0)
-  //       {
-  //         // Reference to the data map for the current basis function.
-  //         auto & bf_map = _local_eim_basis_functions[bf];
+  // For each basis function and each variable, build a vector
+  // of qp data in the Elem ordering given by the
+  // gathered_local_elem_ids, then call
+  //
+  // sys.comm().scatter(data, counts, recv, /*root_id=*/0);
+  std::vector<std::vector<Number>> qp_data(n_vars);
+  if (rank == 0)
+    {
+      // The total amount of qp data is given by summing the entries
+      // of the "counts" vector.
+      auto n_qp_data =
+        std::accumulate(counts.begin(), counts.end(), 0u);
 
-  //         // Clear any data from previous bf
-  //         for (auto var : index_range(qp_data))
-  //           qp_data[var].clear();
+      // On processor 0, reserve enough space to hold all the qp
+      // data for a single basis function for each var.
+      for (auto var : index_range(qp_data))
+        qp_data[var].reserve(n_qp_data);
+    }
 
-  //         for (processor_id_type p=0; p<n_procs; ++p)
-  //           {
-  //             for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
-  //               {
-  //                 auto elem_id = gathered_local_elem_ids[e];
+  // The recv_qp_data vector will be used on the receiving end of all
+  // the scatters below.
+  std::vector<Number> recv_qp_data;
 
-  //                 // Get reference to array[n_vars][n_qp] for current Elem.
-  //                 // Throws an error if the required elem_id is not found.
-  //                 const auto & array = libmesh_map_find(bf_map, elem_id);
+  // Loop from 0..n_bf on _all_ procs, since the scatters inside this
+  // loop are collective.
+  for (auto bf : make_range(n_bf))
+    {
+      // Prepare data for scattering (only on proc 0)
+      if (rank == 0)
+        {
+          // Reference to the data map for the current basis function.
+          auto & bf_map = _local_eim_basis_functions[bf];
 
-  //                 for (auto var : index_range(array))
-  //                   {
-  //                     // Insert all qp values for this var
-  //                     qp_data[var].insert(/*insert at*/qp_data[var].end(),
-  //                                         /*data start*/array[var].begin(),
-  //                                         /*data end*/array[var].end());
-  //                   } // end for (var)
-  //               } // end for (e)
-  //           } // end for proc_id
-  //       } // end if rank==0
+          // Clear any data from previous bf
+          for (auto var : index_range(qp_data))
+            qp_data[var].clear();
 
-  //     // Perform the scatters (all procs)
-  //     for (auto var : make_range(n_vars))
-  //       {
-  //         // Do the scatter for the current var
-  //         sys.comm().scatter(qp_data[var], counts, recv_qp_data, /*root_id=*/0);
+          for (processor_id_type p=0; p<n_procs; ++p)
+            {
+              for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
+                {
+                  auto elem_id = gathered_local_elem_ids[e];
+                  auto side_index = gathered_local_side_indices[e];
 
-  //         if (rank != 0)
-  //           {
-  //             // Store the scattered data we received in _local_eim_basis_functions[bf]
-  //             auto & bf_map = _local_eim_basis_functions[bf];
-  //             auto cursor = recv_qp_data.begin();
+                  // Get reference to array[n_vars][n_qp] for current Elem.
+                  // Throws an error if the required (elem,side) is not found.
+                  const auto & array = libmesh_map_find(bf_map, std::make_pair(elem_id, side_index));
 
-  //             for (auto i : index_range(gathered_local_elem_ids))
-  //               {
-  //                 auto elem_id = gathered_local_elem_ids[i];
-  //                 auto n_qp_this_elem = n_qp_per_elem_data[i];
-  //                 auto & array = bf_map[elem_id];
+                  for (auto var : index_range(array))
+                    {
+                      // Insert all qp values for this var
+                      qp_data[var].insert(/*insert at*/qp_data[var].end(),
+                                          /*data start*/array[var].begin(),
+                                          /*data end*/array[var].end());
+                    } // end for (var)
+                } // end for (e)
+            } // end for proc_id
+        } // end if rank==0
 
-  //                 // Create space to store the data if it doesn't already exist.
-  //                 if (array.empty())
-  //                   array.resize(n_vars);
+      // Perform the scatters (all procs)
+      for (auto var : make_range(n_vars))
+        {
+          // Do the scatter for the current var
+          sys.comm().scatter(qp_data[var], counts, recv_qp_data, /*root_id=*/0);
 
-  //                 array[var].assign(cursor, cursor + n_qp_this_elem);
-  //                 std::advance(cursor, n_qp_this_elem);
-  //               }
-  //           } // if (rank != 0)
-  //       } // end for (var)
-  //   } // end for (bf)
+          if (rank != 0)
+            {
+              // Store the scattered data we received in _local_eim_basis_functions[bf]
+              auto & bf_map = _local_eim_basis_functions[bf];
+              auto cursor = recv_qp_data.begin();
 
-  // // Now that the scattering is done, delete non-local Elem
-  // // information from processor 0's _local_eim_basis_functions data
-  // // structure.
-  // if (rank == 0)
-  //   {
-  //     for (processor_id_type p=1; p<n_procs; ++p)
-  //       {
-  //         for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
-  //           {
-  //             auto elem_id = gathered_local_elem_ids[e];
+              for (auto i : index_range(gathered_local_elem_ids))
+                {
+                  auto elem_id = gathered_local_elem_ids[i];
+                  auto side_index = gathered_local_side_indices[i];
+                  auto n_qp_this_elem = n_qp_per_elem_data[i];
+                  auto & array = bf_map[std::make_pair(elem_id, side_index)];
 
-  //             // Delete this Elem's information from every basis function.
-  //             for (auto & bf_map : _local_eim_basis_functions)
-  //               bf_map.erase(elem_id);
-  //           } // end for (e)
-  //       } // end for proc_id
-  //   } // if (rank == 0)
+                  // Create space to store the data if it doesn't already exist.
+                  if (array.empty())
+                    array.resize(n_vars);
+
+                  array[var].assign(cursor, cursor + n_qp_this_elem);
+                  std::advance(cursor, n_qp_this_elem);
+                }
+            } // if (rank != 0)
+        } // end for (var)
+    } // end for (bf)
+
+  // Now that the scattering is done, delete non-local Elem
+  // information from processor 0's _local_eim_basis_functions data
+  // structure.
+  if (rank == 0)
+    {
+      for (processor_id_type p=1; p<n_procs; ++p)
+        {
+          for (auto e : make_range(start_elem_ids_index[p], end_elem_ids_index[p]))
+            {
+              auto elem_id = gathered_local_elem_ids[e];
+              auto side_index = gathered_local_side_indices[e];
+
+              // Delete this Elem's information from every basis function.
+              for (auto & bf_map : _local_eim_basis_functions)
+                bf_map.erase(std::make_pair(elem_id, side_index));
+            } // end for (e)
+        } // end for proc_id
+    } // if (rank == 0)
 }
 
 void SideRBEIMEvaluation::parametrized_function_vectorized_evaluate(const std::vector<RBParameters> & mus,
