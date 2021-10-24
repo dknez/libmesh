@@ -52,12 +52,31 @@ RBEIMEvaluationBase(comm)
 
 SideRBEIMEvaluation::~SideRBEIMEvaluation() = default;
 
+bool SideRBEIMEvaluation::is_parametrized_function_lookup_table() const
+{
+  return get_parametrized_function().is_lookup_table;
+}
+
+const std::string & SideRBEIMEvaluation::get_lookup_table_param_name() const
+{
+  libmesh_error_msg_if(!is_parametrized_function_lookup_table(), "We expected a lookup table");
+
+  return get_parametrized_function().lookup_table_param_name;
+}
+
 void SideRBEIMEvaluation::set_parametrized_function(std::unique_ptr<SideRBParametrizedFunction> pf)
 {
   _parametrized_function = std::move(pf);
 }
 
 SideRBParametrizedFunction & SideRBEIMEvaluation::get_parametrized_function()
+{
+  libmesh_error_msg_if(!_parametrized_function, "Parametrized function not initialized yet");
+
+  return *_parametrized_function;
+}
+
+const SideRBParametrizedFunction & SideRBEIMEvaluation::get_parametrized_function() const
 {
   libmesh_error_msg_if(!_parametrized_function, "Parametrized function not initialized yet");
 

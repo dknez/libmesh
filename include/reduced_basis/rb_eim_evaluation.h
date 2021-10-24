@@ -60,13 +60,13 @@ public:
   /**
    * Indicate if the parametrized function for this RBEIMEvaluation is a lookup table or not.
    */
-  virtual bool is_parametrized_function_lookup_table() const;
+  virtual bool is_parametrized_function_lookup_table() const override;
 
   /**
    * If this is a lookup table, return the lookup table's parameter
    * name. If it's not a lookup table, throw an error.
    */
-  virtual const std::string & get_lookup_table_param_name() const;
+  virtual const std::string & get_lookup_table_param_name() const override;
 
   /**
    * Set the parametrized function that we will approximate
