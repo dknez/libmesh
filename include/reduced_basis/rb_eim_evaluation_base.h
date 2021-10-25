@@ -197,6 +197,18 @@ public:
   const std::vector<Real> & get_interpolation_points_phi_i_qp(unsigned int index) const;
 
   /**
+   * Return true if _interpolation_points_subdomain_id is non-empty.
+   * It may be empty in the case of a side or node EIM, for example.
+   */
+  bool has_interpolation_points_subdomain_id() const;
+
+  /**
+   * Return true if _interpolation_points_side_index is non-empty.
+   * It may be empty in the case of an element interior EIM, for example.
+   */
+  bool has_interpolation_points_side_index() const;
+
+  /**
    * Set entry of the EIM interpolation matrix.
    */
   void set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value);

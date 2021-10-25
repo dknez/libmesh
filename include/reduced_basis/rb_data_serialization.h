@@ -38,7 +38,7 @@ namespace libMesh
 // Forward declarations
 class RBEvaluation;
 class TransientRBEvaluation;
-class RBEIMEvaluation;
+class RBEIMEvaluationBase;
 class RBSCMEvaluation;
 class RBParametrized;
 class Point;
@@ -145,7 +145,7 @@ public:
    * Initialize a new buffer using the structure from the Cap'n'Proto schema
    * described in rb_data.capnp.
    */
-  RBEIMEvaluationSerialization(RBEIMEvaluation & rb_eval);
+  RBEIMEvaluationSerialization(RBEIMEvaluationBase & rb_eval);
 
   /**
    * Special functions.
@@ -167,9 +167,9 @@ public:
 private:
 
   /**
-   * The RBEvaluation object that will be written to disk.
+   * The RBEIMEvaluationBase object that will be written to disk.
    */
-  RBEIMEvaluation & _rb_eim_eval;
+  RBEIMEvaluationBase & _rb_eim_eval;
 };
 
 
@@ -250,7 +250,7 @@ void add_transient_rb_evaluation_data_to_builder(TransientRBEvaluation & trans_r
  * Templated to deal with both Real and Complex numbers.
  */
 template <typename RBEIMEvaluationBuilderNumber>
-void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluation & rb_eim_eval,
+void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluationBase & rb_eim_eval,
                                            RBEIMEvaluationBuilderNumber & rb_eim_eval_builder);
 
 #if defined(LIBMESH_HAVE_SLEPC) && (LIBMESH_HAVE_GLPK)

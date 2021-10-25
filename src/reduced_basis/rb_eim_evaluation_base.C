@@ -337,6 +337,16 @@ const std::vector<Real> & RBEIMEvaluationBase::get_interpolation_points_phi_i_qp
   return _interpolation_points_phi_i_qp[index];
 }
 
+bool RBEIMEvaluationBase::has_interpolation_points_subdomain_id() const
+{
+  return !_interpolation_points_subdomain_id.empty();
+}
+
+bool RBEIMEvaluationBase::has_interpolation_points_side_index() const
+{
+  return !_interpolation_points_side_index.empty();
+}
+
 void RBEIMEvaluationBase::set_interpolation_matrix_entry(unsigned int i, unsigned int j, Number value)
 {
   libmesh_error_msg_if((i >= _interpolation_matrix.m()) || (j >= _interpolation_matrix.n()),

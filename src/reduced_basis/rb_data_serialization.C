@@ -22,12 +22,11 @@
 
 // libMesh includes
 #include "libmesh/rb_data_serialization.h"
-#include "libmesh/rb_eim_evaluation.h"
 #include "libmesh/enum_to_string.h"
 #include "libmesh/transient_rb_theta_expansion.h"
 #include "libmesh/rb_evaluation.h"
 #include "libmesh/transient_rb_evaluation.h"
-#include "libmesh/rb_eim_evaluation.h"
+#include "libmesh/rb_eim_evaluation_base.h"
 #include "libmesh/rb_scm_evaluation.h"
 #include "libmesh/elem.h"
 #include "libmesh/int_range.h"
@@ -158,7 +157,7 @@ void TransientRBEvaluationSerialization::write_to_file(const std::string & path)
 
 // ---- RBEIMEvaluationSerialization (BEGIN) ----
 
-RBEIMEvaluationSerialization::RBEIMEvaluationSerialization(RBEIMEvaluation & rb_eim_eval)
+RBEIMEvaluationSerialization::RBEIMEvaluationSerialization(RBEIMEvaluationBase & rb_eim_eval)
   :
   _rb_eim_eval(rb_eim_eval)
 {
@@ -196,7 +195,6 @@ void RBEIMEvaluationSerialization::write_to_file(const std::string & path)
 }
 
 // ---- RBEIMEvaluationSerialization (END) ----
-
 
 // ---- RBSCMEvaluationSerialization (BEGIN) ----
 
@@ -574,7 +572,7 @@ void add_transient_rb_evaluation_data_to_builder(TransientRBEvaluation & trans_r
 }
 
 template <typename RBEIMEvaluationBuilderNumber>
-void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluation & rb_eim_evaluation,
+void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluationBase & rb_eim_evaluation,
                                            RBEIMEvaluationBuilderNumber & rb_eim_evaluation_builder)
 {
   // Number of basis functions
@@ -626,6 +624,7 @@ void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluation & rb_eim_evaluation,
   }
 
   // Interpolation points subdomain IDs
+  if(rb_eim_evaluation.has_interpolation_points_subdomain_id())
   {
     auto interpolation_points_subdomain_id_list =
       rb_eim_evaluation_builder.initInterpolationSubdomainId(n_bfs);
@@ -669,7 +668,7 @@ void add_rb_eim_evaluation_data_to_builder(RBEIMEvaluation & rb_eim_evaluation,
   }
 
   // Optionally store EIM solutions for the training set
-  if (rb_eim_evaluation.get_parametrized_function().is_lookup_table)
+  if (rb_eim_evaluation.is_parametrized_function_lookup_table())
     {
       const std::vector<DenseVector<Number>> & eim_solutions = rb_eim_evaluation.get_eim_solutions_for_training_set();
 
