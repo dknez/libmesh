@@ -527,6 +527,12 @@ public:
   virtual std::set<unsigned int> get_eim_vars_to_project_and_write() const;
 
   /**
+   * Similar to the method above, this is a virtual function that specifies which
+   * EIM variables will be "observed" at observation points.
+   */
+  virtual std::set<unsigned int> get_eim_vars_to_observe() const;
+
+  /**
    * Project all basis functions using project_qp_data_map_onto_system() and
    * then write out the resulting vectors.
    */
@@ -757,22 +763,36 @@ private:
   void node_distribute_bfs(const System & sys);
 
   /**
-   * Let {p_1,...,p_n} be a set of n "observation points", where we can
-   * observe the values of our EIM basis functions. Also, let
-   * {comp_k} be the components of the EIM basis function that
-   * we will observe. Then the corresponding observation values, v_ijk,
-   * are given by:
-   *  v_ijk = eim_basis_function[i][p_j][comp_k].
+   * We also optionally store EIM data at a set of "observation points."
+   * With this data we are able to reconstruct the EIM approximation at
+   * extra points (other than the "EIM interpolation points"). This can
+   * be useful for accessing the EIM approximation at other locations
+   * without reconstructing the entire spatially-varying EIM fields.
    *
-   * These observation values can be used to observe the EIM approximation
-   * at specific points of interest, where the points of interest are defined
-   * by the observation points.
-   *
-   * _observation_points_value is indexed as follows:
+   * We store EIM function values at observation points in
+   * _observation_points_values, which is indexed as follows:
    *  basis_function index --> observation point index --> comp index --> value
+   * The comp indices that we observe are defined by get_eim_vars_to_observe().
+   */
+  std::vector<std::vector<std::vector<Number>>> _observation_points_values;
+
+  /**
+   * Below we store the "observation points" version of the data that we
+   * store for interpolation points. This is currently only supported for
+   * the case of "element interior" data. The "side" and "node" versions
+   * can be added subsequently.
+   *
+   * Note that we do not specify the list of components of the EIM function
+   * that we will observe below. This is because we assume that these
+   * components will be specified via the get_eim_vars_to_observe()
+   * virtual function.
    */
   std::vector<Point> _observation_points_xyz;
-  std::vector<std::vector<std::vector<Number>>> _observation_points_values;
+  std::vector<subdomain_id_type> _observation_points_subdomain_id;
+  std::vector<dof_id_type> _observation_points_elem_id;
+  std::vector<unsigned int> _observation_points_qp;
+  std::vector<std::vector<Real>> _observation_points_phi_i_qp;
+  std::vector<std::vector<unsigned int>> _observation_points_spatial_indices;
 
   /**
    * Boolean to indicate if we skip updating _rb_eim_solutions in rb_eim_solves().

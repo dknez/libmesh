@@ -2902,6 +2902,11 @@ std::set<unsigned int> RBEIMEvaluation::get_eim_vars_to_project_and_write() cons
   return std::set<unsigned int>();
 }
 
+std::set<unsigned int> RBEIMEvaluation::get_eim_vars_to_observe() const
+{
+  return std::set<unsigned int>();
+}
+
 void RBEIMEvaluation::write_out_projected_basis_functions(System & sys,
                                                           const std::string & directory_name)
 {
